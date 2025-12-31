@@ -1,6 +1,6 @@
 # Genro-TreeStore
 
-Hierarchical data structures with builder pattern support for the Genro ecosystem (Genro Kyō).
+A lightweight, zero-dependency hierarchical data structure inspired by Genro Bag.
 
 ```{toctree}
 :maxdepth: 2
@@ -15,33 +15,43 @@ api/index
 
 ## Overview
 
-**genro-treestore** provides a lightweight, zero-dependency library for creating and managing hierarchical data structures in Python.
+**genro-treestore** provides two complementary APIs:
 
-### Key Features
+1. **TreeStore**: Bag-like API with `setItem`/`getItem`, path autocreate, fluent chaining
+2. **TreeStoreBuilder**: Builder pattern with auto-labeling and validation
 
-- **TreeStore**: A container of nodes with hierarchical navigation
-- **TreeStoreNode**: Nodes with label, attributes, and value (scalar or nested TreeStore)
-- **TreeStoreBuilder**: Base class for typed builders with validation
-- **@valid_children**: Decorator for child validation with cardinality constraints
-- **Path access**: Dotted paths, positional (`#N`), and attribute (`?attr`) syntax
-
-### Quick Example
+### TreeStore (Bag-like API)
 
 ```python
-from genro_treestore import TreeStore, TreeStoreBuilder, valid_children
+from genro_treestore import TreeStore
 
-# Basic usage
 store = TreeStore()
-div = store.child('div', color='red')
-ul = div.child('ul')
-ul.child('li', value='First item')
-ul.child('li', value='Second item')
 
-# Access by path
-store['div_0.ul_0.li_0'].value  # 'First item'
-store['div_0?color']  # 'red'
+# Create nested structure with autocreate
+store.setItem('config.database.host', 'localhost')
+store.setItem('config.database.port', 5432)
 
-# Typed builder with validation
+# Access values
+store['config.database.host']  # 'localhost'
+
+# Fluent chaining
+store.setItem('html').setItem('body').setItem('div', id='main')
+
+# Attributes
+store.setAttr('html.body.div', color='red')
+store['html.body.div?color']  # 'red'
+
+# Digest
+store.digest('#k')  # labels
+store.digest('#v')  # values
+store.digest('#k,#v,#a.color')  # tuples
+```
+
+### TreeStoreBuilder (Builder Pattern)
+
+```python
+from genro_treestore import TreeStoreBuilder, valid_children
+
 class HtmlBuilder(TreeStoreBuilder):
     @valid_children('li')
     def ul(self, **attr):
@@ -49,7 +59,24 @@ class HtmlBuilder(TreeStoreBuilder):
 
     def li(self, value=None, **attr):
         return self.child('li', value=value, **attr)
+
+builder = HtmlBuilder()
+ul = builder.ul()
+ul.li('Item 1')
+ul.li('Item 2')
+
+# Auto-labels: ul_0, li_0, li_1
+builder['ul_0.li_0']  # 'Item 1'
 ```
+
+## Key Features
+
+- **Zero dependencies**: Pure Python, no external packages
+- **O(1) lookup**: Dict-based internal storage
+- **Path autocreate**: `store.setItem('a.b.c', value)` creates all intermediate nodes
+- **Fluent chaining**: Chain `setItem` calls for readable code
+- **Digest**: Extract data with `#k`, `#v`, `#a` syntax (like Bag)
+- **Builder validation**: `@valid_children` with cardinality constraints
 
 ## Installation
 

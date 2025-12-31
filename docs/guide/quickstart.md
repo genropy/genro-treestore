@@ -8,113 +8,159 @@ This guide will help you get started with genro-treestore in a few minutes.
 pip install genro-treestore
 ```
 
-## Basic Usage
+## TreeStore (Bag-like API)
+
+TreeStore provides a familiar API inspired by Genro Bag.
 
 ### Creating a TreeStore
 
 ```python
 from genro_treestore import TreeStore
 
-# Create an empty store
 store = TreeStore()
 
-# Add children
-div = store.child('div', id='main', color='red')
-span = div.child('span', value='Hello World')
+# Create nodes with setItem (autocreates path)
+store.setItem('config.database.host', 'localhost')
+store.setItem('config.database.port', 5432)
+store.setItem('config.cache.enabled', True)
 ```
 
-### Understanding the Structure
-
-A TreeStore is a container of nodes. Each node has:
-
-- **label**: Auto-generated identifier (e.g., `div_0`, `div_1`)
-- **tag**: The type of node (stored in `attr['_tag']`)
-- **attr**: Dictionary of attributes
-- **value**: Either a scalar value or a nested TreeStore
+### Accessing Values
 
 ```python
-# Node attributes
-print(div.label)      # 'div_0'
-print(div.attr)       # {'_tag': 'div', 'id': 'main', 'color': 'red'}
-print(span.value)     # 'Hello World'
+# Using __getitem__
+store['config.database.host']  # 'localhost'
 
-# Parent-child relationship
-print(span.parent)    # The TreeStore containing span
-print(span.parent.parent)  # The div node
+# Using getItem (with default)
+store.getItem('config.database.host')  # 'localhost'
+store.getItem('missing', 'default')  # 'default'
 ```
 
-### Auto-labeling
-
-Labels are automatically generated using the pattern `tag_N`:
+### Setting Values
 
 ```python
-store = TreeStore()
-store.child('div')    # label: div_0
-store.child('div')    # label: div_1
-store.child('span')   # label: span_0
-store.child('div')    # label: div_2
+# Using __setitem__ (autocreates path)
+store['users.alice'] = 'Alice'
+store['users.bob'] = 'Bob'
+
+# Using setItem with attributes
+store.setItem('items.product', 'Widget', price=9.99, stock=100)
 ```
 
-## Accessing Nodes
+### Fluent Chaining
 
-### By Label
-
-```python
-node = store['div_0']
-```
-
-### By Position
+`setItem` returns TreeStore for fluent chaining:
 
 ```python
-first = store['#0']   # First child
-last = store['#-1']   # Last child
-```
+# Chain branches (returns child store)
+store.setItem('html').setItem('body').setItem('div', id='main')
 
-### By Path
-
-```python
-# Nested access
-nested = store['div_0.ul_0.li_0']
-
-# Mixed positional and label
-node = store['#0.ul_0.#2']
+# Chain leaves on same level (returns parent)
+ul = store.setItem('html.body.ul')
+ul.setItem('li1', 'Item 1').setItem('li2', 'Item 2').setItem('li3', 'Item 3')
 ```
 
 ### Attributes
 
 ```python
-# Get attribute
-color = store['div_0?color']
+# Set attributes
+store.setItem('div', color='red', size=10)
+store.setAttr('div', border='1px')
 
-# Set attribute
-store['div_0?color'] = 'blue'
+# Get attributes
+store['div?color']  # 'red'
+store.getAttr('div', 'size')  # 10
+store.getAttr('div')  # {'color': 'red', 'size': 10, 'border': '1px'}
 ```
 
-## Working with Values
+### Path Syntax
 
 ```python
-# Set value directly
-node = store.child('item', value=42)
-print(node.value)  # 42
-
-# Nested TreeStore as value
-parent = store.child('container')
-child = parent.child('nested', value='inside')
-print(parent.value['nested_0'].value)  # 'inside'
+store['label']           # by label
+store['#0']              # first node (positional)
+store['#-1']             # last node
+store['a.b.c']           # dotted path
+store['#0.child.#2']     # mixed
+store['path?attr']       # get attribute
+store['path?attr'] = v   # set attribute
 ```
 
-## Iteration
+### Digest
+
+Extract data from nodes:
 
 ```python
-# Iterate over children
+store.setItem('users.alice', 'Alice', role='admin')
+store.setItem('users.bob', 'Bob', role='user')
+
+users = store.getNode('users').value
+users.digest('#k')  # ['alice', 'bob']
+users.digest('#v')  # ['Alice', 'Bob']
+users.digest('#a.role')  # ['admin', 'user']
+users.digest('#k,#v')  # [('alice', 'Alice'), ('bob', 'Bob')]
+```
+
+### Iteration
+
+```python
+# Iterate over nodes
 for node in store:
-    print(node.label, node.attr['_tag'])
+    print(node.label, node.value)
 
-# Get all nodes
-all_nodes = list(store)
+# Get lists
+store.keys()    # ['label1', 'label2', ...]
+store.values()  # [value1, value2, ...]
+store.items()   # [('label1', value1), ...]
+store.nodes()   # [TreeStoreNode, ...]
 
-# Length
-print(len(store))  # Number of children
+# Walk tree
+for path, node in store.walk():
+    print(path, node.value)
+```
+
+## TreeStoreBuilder (Builder Pattern)
+
+For structured data with auto-labeling and validation.
+
+### Basic Builder
+
+```python
+from genro_treestore import TreeStoreBuilder
+
+builder = TreeStoreBuilder()
+
+# child() creates nodes with auto-labels
+div = builder.child('div', color='red')  # label: div_0
+span = div.child('span', value='Hello')  # label: span_0
+
+builder['div_0.span_0']  # 'Hello'
+builder['div_0?color']   # 'red'
+```
+
+### Typed Builder
+
+```python
+from genro_treestore import TreeStoreBuilder, valid_children
+
+class HtmlBuilder(TreeStoreBuilder):
+    def div(self, **attr):
+        return self.child('div', **attr)
+
+    @valid_children('li')  # Only 'li' allowed
+    def ul(self, **attr):
+        return self.child('ul', **attr)
+
+    def li(self, value=None, **attr):
+        return self.child('li', value=value, **attr)
+
+builder = HtmlBuilder()
+div = builder.div(id='container')
+ul = div.ul()
+ul.li('Item 1')
+ul.li('Item 2')
+
+# Auto-labels: div_0, ul_0, li_0, li_1
+builder['div_0.ul_0.li_0']  # 'Item 1'
 ```
 
 ## Next Steps

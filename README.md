@@ -7,7 +7,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Hierarchical data structures with builder pattern support for the Genro ecosystem (Genro Kyō).
+A lightweight, zero-dependency hierarchical data structure inspired by Genro Bag, for the Genro ecosystem (Genro Kyō).
 
 ## Installation
 
@@ -17,31 +17,58 @@ pip install genro-treestore
 
 ## Features
 
-- **TreeStore**: A container of nodes with hierarchical navigation
-- **TreeStoreNode**: Nodes with label, attributes, and value (scalar or nested TreeStore)
-- **TreeStoreBuilder**: Base class for typed builders with validation
-- **@valid_children**: Decorator for child validation with cardinality constraints
-- **Path access**: Dotted paths, positional (#N), and attribute (?attr) syntax
+- **TreeStore**: Bag-like API with `setItem`/`getItem`, path autocreate, fluent chaining
+- **TreeStoreNode**: Nodes with label, attributes, and value
+- **TreeStoreBuilder**: Builder pattern with auto-labeling and `@valid_children` validation
+- **Path syntax**: Dotted paths, positional (`#N`), and attribute (`?attr`) access
+- **Digest**: Extract data with `#k`, `#v`, `#a` syntax (like Bag)
+- **Zero dependencies**: Pure Python, no external packages required
 
 ## Quick Start
 
+### Bag-like API (TreeStore)
+
 ```python
-from genro_treestore import TreeStore, TreeStoreBuilder, valid_children
+from genro_treestore import TreeStore
 
-# Basic usage
 store = TreeStore()
-div = store.child('div', color='red')
-ul = div.child('ul')
-ul.child('li', value='First item')
-ul.child('li', value='Second item')
 
-# Access by path
-store['div_0.ul_0.li_0'].value  # 'First item'
-store['div_0?color']  # 'red'
+# Create nested structure with autocreate
+store.setItem('config.database.host', 'localhost')
+store.setItem('config.database.port', 5432)
 
-# Typed builder with validation
+# Access values
+store['config.database.host']  # 'localhost'
+store.getItem('config.database.port')  # 5432
+
+# Fluent chaining
+store.setItem('html').setItem('body').setItem('div', id='main')
+store['html.body.div?id']  # 'main'
+
+# Attributes
+store.setAttr('html.body.div', color='red', size=10)
+store.getAttr('html.body.div', 'color')  # 'red'
+
+# Digest (like Bag)
+store.setItem('users.alice', 'Alice', role='admin')
+store.setItem('users.bob', 'Bob', role='user')
+users = store.getNode('users').value
+users.digest('#k')  # ['alice', 'bob']
+users.digest('#v')  # ['Alice', 'Bob']
+users.digest('#a.role')  # ['admin', 'user']
+users.digest('#k,#v')  # [('alice', 'Alice'), ('bob', 'Bob')]
+```
+
+### Builder Pattern (TreeStoreBuilder)
+
+```python
+from genro_treestore import TreeStoreBuilder, valid_children
+
 class HtmlBuilder(TreeStoreBuilder):
-    @valid_children('li')
+    def div(self, **attr):
+        return self.child('div', **attr)
+
+    @valid_children('li')  # Only 'li' children allowed
     def ul(self, **attr):
         return self.child('ul', **attr)
 
@@ -49,32 +76,49 @@ class HtmlBuilder(TreeStoreBuilder):
         return self.child('li', value=value, **attr)
 
 builder = HtmlBuilder()
-ul = builder.ul()
+div = builder.div(id='container')
+ul = div.ul()
 ul.li('Item 1')
 ul.li('Item 2')
+ul.li('Item 3')
+
+# Auto-generated labels: div_0, ul_0, li_0, li_1, li_2
+builder['div_0.ul_0.li_0']  # 'Item 1'
+builder['div_0?id']  # 'container'
 ```
 
 ## Path Syntax
 
-- `store['div_0']` - Access by label
-- `store['#0']` - Access by position (first node)
-- `store['div_0.ul_0.li_0']` - Dotted path
-- `store['#0.ul_0.#3']` - Mixed positional and label
-- `store['div_0?color']` - Get attribute
-- `store['div_0?color'] = 'blue'` - Set attribute
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `'label'` | Access by label | `store['div']` |
+| `'#N'` | Access by position | `store['#0']` (first), `store['#-1']` (last) |
+| `'a.b.c'` | Dotted path | `store['html.body.div']` |
+| `'path?attr'` | Get attribute | `store['div?color']` |
+| `'path?attr' = val` | Set attribute | `store['div?color'] = 'red'` |
 
-## Cardinality Constraints
+## Cardinality Constraints (Builder)
 
 ```python
 @valid_children(
-    title='1',      # exactly one
+    title='1',      # exactly one required
     item='1:',      # one or more
-    footer='0:1',   # zero or one
+    footer='0:1',   # zero or one (optional)
     tag='0:3',      # zero to three
+    meta='2:5',     # two to five
 )
-def container(self, **attr):
-    return self.child('container', **attr)
+def section(self, **attr):
+    return self.child('section', **attr)
 ```
+
+## API Comparison: TreeStore vs TreeStoreBuilder
+
+| TreeStore (Bag-like) | TreeStoreBuilder |
+|---------------------|------------------|
+| `setItem(path, value, **attr)` | `child(tag, value=..., **attr)` |
+| Explicit labels in path | Auto-generated labels (`tag_N`) |
+| Fluent chaining (returns TreeStore) | Returns TreeStore/Node |
+| No validation | `@valid_children` validation |
 
 ## Development
 

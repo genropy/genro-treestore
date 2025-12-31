@@ -1,15 +1,13 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""TreeStore - A hierarchical structure with builder pattern support.
+"""TreeStore - A lightweight hierarchical data structure inspired by Genro Bag.
 
 This module provides:
 - TreeStoreNode: A node with label, attributes, and value
-- TreeStore: A container of TreeStoreNodes with builder methods
-- TreeStoreBuilder: Base class for typed builders with tag support
+- TreeStore: A Bag-like container with setItem/getItem API
+- TreeStoreBuilder: Builder pattern with auto-labeling and validation
 - valid_children: Decorator for child validation in typed builders
-
-The tag (node type) is stored in attr['_tag'] for builder use cases.
 """
 
 from __future__ import annotations
@@ -26,16 +24,16 @@ class TreeStoreNode:
 
     Each node has:
     - label: The node's unique name/key within its parent
-    - attr: Dictionary of attributes (may include '_tag' for typed builders)
+    - attr: Dictionary of attributes
     - value: Either a scalar value or a TreeStore (for children)
     - parent: Reference to the containing TreeStore
 
     Example:
-        >>> node = TreeStoreNode('user_0', {'_tag': 'user', 'id': 1}, TreeStore())
+        >>> node = TreeStoreNode('user', {'id': 1}, 'Alice')
         >>> node.label
-        'user_0'
-        >>> node.tag  # convenience property for attr.get('_tag')
         'user'
+        >>> node.value
+        'Alice'
     """
 
     __slots__ = ('label', 'attr', 'value', 'parent')
@@ -51,7 +49,7 @@ class TreeStoreNode:
 
         Args:
             label: The node's unique name/key.
-            attr: Optional dictionary of attributes (may include '_tag').
+            attr: Optional dictionary of attributes.
             value: The node's value (scalar or TreeStore for children).
             parent: The TreeStore containing this node.
         """
@@ -62,7 +60,7 @@ class TreeStoreNode:
 
     @property
     def tag(self) -> str | None:
-        """Get the node's tag (type) from attr['_tag']."""
+        """Get the node's tag (type) from attr['_tag'] if present."""
         return self.attr.get('_tag')
 
     def __repr__(self) -> str:
@@ -71,9 +69,6 @@ class TreeStoreNode:
             if isinstance(self.value, TreeStore)
             else repr(self.value)
         )
-        tag = self.tag
-        if tag:
-            return f"TreeStoreNode({self.label!r}, tag={tag!r}, value={value_repr})"
         return f"TreeStoreNode({self.label!r}, value={value_repr})"
 
     @property
@@ -88,42 +83,60 @@ class TreeStoreNode:
 
     @property
     def _(self) -> TreeStore:
-        """Return parent TreeStore for chaining after leaf operations.
+        """Return parent TreeStore for navigation/chaining.
 
         Example:
-            >>> ul.li('pino')._.li('gino')  # chain on same parent
+            >>> node._.setItem('sibling', 'value')  # add sibling
         """
         if self.parent is None:
             raise ValueError("Node has no parent")
         return self.parent
 
-    @property
-    def root(self) -> TreeStore:
-        """Get the root TreeStore of this node's hierarchy."""
-        if self.parent is None:
-            raise ValueError("Node has no parent")
-        return self.parent.root
+    def getAttr(self, attr: str | None = None, default: Any = None) -> Any:
+        """Get attribute value or all attributes.
+
+        Args:
+            attr: Attribute name. If None, returns all attributes.
+            default: Default value if attribute not found.
+
+        Returns:
+            Attribute value, default, or dict of all attributes.
+        """
+        if attr is None:
+            return self.attr
+        return self.attr.get(attr, default)
+
+    def setAttr(self, _attr: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        """Set attributes on the node.
+
+        Args:
+            _attr: Dictionary of attributes to set.
+            **kwargs: Additional attributes as keyword arguments.
+        """
+        if _attr:
+            self.attr.update(_attr)
+        self.attr.update(kwargs)
 
 
 class TreeStore:
-    """A container of TreeStoreNodes with hierarchical navigation and builder methods.
+    """A Bag-like hierarchical data container with O(1) lookup.
 
-    TreeStore maintains:
-    - nodes: Dictionary of {label: TreeStoreNode}
-    - parent: Reference to the TreeStoreNode that contains this store
-    - _tag_counters: Counters for auto-generated labels per tag
+    TreeStore provides a familiar API similar to Genro Bag:
+    - setItem(path, value, **attr): Create/update nodes with autocreate
+    - getItem(path) / store[path]: Get values
+    - getAttr(path, attr) / setAttr(path, **attr): Attribute access
+    - digest(what): Extract data with #k, #v, #a syntax
 
-    The dual relationship enables bidirectional traversal:
-    - node.parent -> TreeStore containing the node
-    - store.parent -> TreeStoreNode that has this store as value
+    The internal storage uses dict for O(1) lookup performance.
 
     Example:
         >>> store = TreeStore()
-        >>> div = store.child('div', color='red')
-        >>> div.child('span', 'Hello')
+        >>> store.setItem('html.body.div', color='red')
+        >>> store['html.body.div?color']
+        'red'
     """
 
-    __slots__ = ('nodes', 'parent', '_tag', '_tag_counters')
+    __slots__ = ('_nodes', 'parent', '_tag', '_tag_counters')
 
     def __init__(self, parent: TreeStoreNode | None = None) -> None:
         """Initialize a TreeStore.
@@ -131,22 +144,32 @@ class TreeStore:
         Args:
             parent: The TreeStoreNode that contains this store as its value.
         """
-        self.nodes: dict[str, TreeStoreNode] = {}
+        self._nodes: dict[str, TreeStoreNode] = {}
         self.parent = parent
-        self._tag: str | None = None  # Tag for validation context
-        self._tag_counters: dict[str, int] = {}  # {tag: next_number}
+        self._tag: str | None = None  # Tag for validation context (used by Builder)
+        self._tag_counters: dict[str, int] = {}  # For auto-labeling in Builder
 
     def __repr__(self) -> str:
-        return f"TreeStore({list(self.nodes.keys())})"
+        return f"TreeStore({list(self._nodes.keys())})"
 
     def __len__(self) -> int:
-        return len(self.nodes)
+        return len(self._nodes)
 
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.nodes)
+    def __iter__(self) -> Iterator[TreeStoreNode]:
+        """Iterate over nodes (not labels)."""
+        return iter(self._nodes.values())
 
     def __contains__(self, label: str) -> bool:
-        return label in self.nodes
+        """Check if a label exists at root level or as a path."""
+        if '.' not in label:
+            return label in self._nodes
+        try:
+            self.getNode(label)
+            return True
+        except KeyError:
+            return False
+
+    # ==================== Path Utilities ====================
 
     def _parse_path_segment(self, segment: str) -> tuple[bool, int | str]:
         """Parse a path segment, detecting positional index (#N) syntax.
@@ -154,115 +177,438 @@ class TreeStore:
         Returns:
             Tuple of (is_positional, index_or_label)
         """
-        if segment.startswith('#') and segment[1:].isdigit():
-            return True, int(segment[1:])
+        if segment.startswith('#'):
+            rest = segment[1:]
+            if rest.lstrip('-').isdigit():
+                return True, int(rest)
         return False, segment
 
     def _get_node_by_position(self, index: int) -> TreeStoreNode:
         """Get node by positional index."""
-        labels = list(self.nodes.keys())
+        labels = list(self._nodes.keys())
+        if index < 0:
+            index = len(labels) + index
         if index < 0 or index >= len(labels):
             raise KeyError(f"Position #{index} out of range (0-{len(labels)-1})")
-        return self.nodes[labels[index]]
+        return self._nodes[labels[index]]
 
-    def _resolve_path(self, path: str) -> tuple[TreeStoreNode, str | None]:
-        """Resolve a path to a node and optional attribute name.
+    def _htraverse(
+        self, path: str, autocreate: bool = False
+    ) -> tuple[TreeStore, str]:
+        """Traverse path, optionally creating intermediate nodes.
 
         Args:
-            path: Path string, optionally ending with ?attr_name
+            path: Dotted path string.
+            autocreate: If True, create missing intermediate nodes.
 
         Returns:
-            Tuple of (node, attr_name or None)
+            Tuple of (parent_store, final_label)
+        """
+        if not path:
+            return self, ''
+
+        parts = path.split('.')
+        current = self
+
+        for i, part in enumerate(parts[:-1]):
+            is_pos, key = self._parse_path_segment(part)
+
+            if is_pos:
+                try:
+                    node = current._get_node_by_position(key)
+                except KeyError:
+                    if autocreate:
+                        raise KeyError(f"Cannot autocreate with positional syntax #{key}")
+                    raise
+            else:
+                if key not in current._nodes:
+                    if autocreate:
+                        # Create intermediate branch node
+                        child_store = current.__class__.__new__(current.__class__)
+                        child_store._nodes = {}
+                        child_store.parent = None
+                        child_store._tag = None
+                        child_store._tag_counters = {}
+
+                        node = TreeStoreNode(key, {}, value=child_store, parent=current)
+                        child_store.parent = node
+                        current._nodes[key] = node
+                    else:
+                        raise KeyError(f"Path segment '{key}' not found")
+                node = current._nodes[key]
+
+            if not node.is_branch:
+                if autocreate:
+                    # Convert leaf to branch
+                    child_store = current.__class__.__new__(current.__class__)
+                    child_store._nodes = {}
+                    child_store.parent = node
+                    child_store._tag = None
+                    child_store._tag_counters = {}
+                    node.value = child_store
+                else:
+                    remaining = '.'.join(parts[i+1:])
+                    raise KeyError(f"'{part}' is a leaf, cannot access '{remaining}'")
+
+            current = node.value
+
+        return current, parts[-1]
+
+    # ==================== Core API (Bag-like) ====================
+
+    def setItem(
+        self,
+        path: str,
+        value: Any = None,
+        _attributes: dict[str, Any] | None = None,
+        **kwargs: Any
+    ) -> TreeStore:
+        """Set an item at the given path, creating intermediate nodes as needed.
+
+        Args:
+            path: Dotted path to the item (e.g., 'html.body.div').
+            value: The value to store. If None, creates a branch node.
+            _attributes: Dictionary of attributes.
+            **kwargs: Additional attributes as keyword arguments.
+
+        Returns:
+            TreeStore for fluent chaining:
+            - If branch created: returns the new branch's TreeStore
+            - If leaf created: returns the parent TreeStore
+
+        Example:
+            >>> store.setItem('html').setItem('body').setItem('div', color='red')
+            >>> store.setItem('ul').setItem('li', 'Item 1').setItem('li', 'Item 2')
+        """
+        parent_store, label = self._htraverse(path, autocreate=True)
+
+        # Merge attributes
+        final_attr: dict[str, Any] = {}
+        if _attributes:
+            final_attr.update(_attributes)
+        final_attr.update(kwargs)
+
+        # Check if node exists
+        if label in parent_store._nodes:
+            node = parent_store._nodes[label]
+            if value is not None:
+                node.value = value
+            if final_attr:
+                node.attr.update(final_attr)
+            # Return appropriate store for chaining
+            if node.is_branch:
+                return node.value
+            return parent_store
+
+        # Create new node
+        if value is not None:
+            # Leaf node
+            node = TreeStoreNode(label, final_attr, value, parent=parent_store)
+            parent_store._nodes[label] = node
+            return parent_store  # Return parent for chaining siblings
+        else:
+            # Branch node
+            child_store = self.__class__.__new__(self.__class__)
+            child_store._nodes = {}
+            child_store.parent = None
+            child_store._tag = None
+            child_store._tag_counters = {}
+
+            node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
+            child_store.parent = node
+            parent_store._nodes[label] = node
+            return child_store  # Return child store for chaining children
+
+    def getItem(self, path: str, default: Any = None) -> Any:
+        """Get the value at the given path.
+
+        Args:
+            path: Dotted path, optionally with ?attr suffix.
+            default: Default value if path not found.
+
+        Returns:
+            The value at the path, attribute value, or default.
+
+        Example:
+            >>> store.getItem('html.body.div')  # returns value
+            >>> store.getItem('html.body.div?color')  # returns attribute
+        """
+        try:
+            # Check for attribute access
+            attr_name = None
+            if '?' in path:
+                path, attr_name = path.rsplit('?', 1)
+
+            node = self.getNode(path)
+
+            if attr_name is not None:
+                return node.attr.get(attr_name, default)
+
+            return node.value
+        except KeyError:
+            return default
+
+    def __getitem__(self, path: str) -> Any:
+        """Get value or attribute by path.
+
+        Args:
+            path: Dotted path, with optional ?attr or positional #N syntax.
+
+        Returns:
+            Value at path, or attribute if ?attr used.
+
+        Example:
+            >>> store['html.body.div']  # value
+            >>> store['html.body.div?color']  # attribute
+            >>> store['#0.#1']  # positional access
         """
         # Check for attribute access
         attr_name = None
         if '?' in path:
             path, attr_name = path.rsplit('?', 1)
 
-        # Simple case: no dots
-        if '.' not in path:
-            is_pos, key = self._parse_path_segment(path)
-            if is_pos:
-                return self._get_node_by_position(key), attr_name
-            return self.nodes[path], attr_name
+        node = self.getNode(path)
 
-        # Dotted path
-        parts = path.split('.')
-        current = self
-        node = None
-        for i, part in enumerate(parts):
-            is_pos, key = self._parse_path_segment(part)
-            if is_pos:
-                node = current._get_node_by_position(key)
-            else:
-                node = current.nodes[key]
-
-            if i < len(parts) - 1:
-                # Not the last part, descend into branch
-                if not node.is_branch:
-                    raise KeyError(f"'{part}' is not a branch at path '{'.'.join(parts[:i+1])}'")
-                current = node.value
-        return node, attr_name
-
-    def __getitem__(self, path: str) -> TreeStoreNode | Any:
-        """Get node or attribute by path.
-
-        Args:
-            path: Single label, dotted path, or positional path.
-                  Supports #N syntax for positional access.
-                  Supports ?attr suffix for attribute access.
-
-        Returns:
-            TreeStoreNode at the specified path, or attribute value if ?attr is used.
-
-        Example:
-            >>> store['div_0']              # by label -> TreeStoreNode
-            >>> store['#0']                 # first node (positional)
-            >>> store['div_0.ul_0.li_0']    # dotted path by labels
-            >>> store['#0.ul_0.#3']         # mixed: first child, then ul_0, then 4th child
-            >>> store['div_0?color']        # get 'color' attribute of div_0
-            >>> store['div_0.ul_0?class']   # get 'class' attribute of ul_0
-        """
-        node, attr_name = self._resolve_path(path)
         if attr_name is not None:
             return node.attr.get(attr_name)
-        return node
+
+        return node.value
 
     def __setitem__(self, path: str, value: Any) -> None:
-        """Set attribute value by path.
+        """Set value or attribute by path.
 
         Args:
-            path: Path with ?attr suffix for attribute access.
+            path: Dotted path. Use ?attr suffix to set attribute.
             value: Value to set.
 
         Example:
-            >>> store['div_0?color'] = 'red'
-            >>> store['div_0.ul_0.li_0?class'] = 'active'
+            >>> store['html.body.div'] = 'text'  # set value
+            >>> store['html.body.div?color'] = 'red'  # set attribute
         """
-        node, attr_name = self._resolve_path(path)
-        if attr_name is None:
-            raise KeyError("Cannot set node directly, use ?attr syntax to set attributes")
-        node.attr[attr_name] = value
+        if '?' in path:
+            # Set attribute
+            node_path, attr_name = path.rsplit('?', 1)
+            node = self.getNode(node_path)
+            node.attr[attr_name] = value
+        else:
+            # Set value (with autocreate)
+            self.setItem(path, value)
 
-    @property
-    def _(self) -> TreeStore:
-        """Return parent's parent TreeStore for navigation.
+    def getNode(self, path: str) -> TreeStoreNode:
+        """Get node at the given path.
+
+        Args:
+            path: Dotted path to the node.
+
+        Returns:
+            TreeStoreNode at the path.
+
+        Raises:
+            KeyError: If path not found.
+        """
+        if not path:
+            raise KeyError("Empty path")
+
+        if '.' not in path:
+            is_pos, key = self._parse_path_segment(path)
+            if is_pos:
+                return self._get_node_by_position(key)
+            return self._nodes[path]
+
+        parent_store, label = self._htraverse(path, autocreate=False)
+        is_pos, key = self._parse_path_segment(label)
+        if is_pos:
+            return parent_store._get_node_by_position(key)
+        return parent_store._nodes[label]
+
+    def getAttr(self, path: str, attr: str | None = None, default: Any = None) -> Any:
+        """Get attribute(s) from node at path.
+
+        Args:
+            path: Path to the node.
+            attr: Attribute name. If None, returns all attributes.
+            default: Default value if attribute not found.
+
+        Returns:
+            Attribute value, all attributes dict, or default.
+        """
+        try:
+            node = self.getNode(path)
+            return node.getAttr(attr, default)
+        except KeyError:
+            return default
+
+    def setAttr(
+        self, path: str, _attributes: dict[str, Any] | None = None, **kwargs: Any
+    ) -> None:
+        """Set attributes on node at path.
+
+        Args:
+            path: Path to the node.
+            _attributes: Dictionary of attributes.
+            **kwargs: Additional attributes as keyword arguments.
+        """
+        node = self.getNode(path)
+        node.setAttr(_attributes, **kwargs)
+
+    def delItem(self, path: str) -> TreeStoreNode:
+        """Delete and return node at path.
+
+        Args:
+            path: Path to the node.
+
+        Returns:
+            The removed TreeStoreNode.
+        """
+        if '.' not in path:
+            return self._nodes.pop(path)
+
+        parent_store, label = self._htraverse(path, autocreate=False)
+        return parent_store._nodes.pop(label)
+
+    def pop(self, path: str, default: Any = None) -> Any:
+        """Remove and return value at path.
+
+        Args:
+            path: Path to the node.
+            default: Default value if path not found.
+
+        Returns:
+            The value of the removed node, or default.
+        """
+        try:
+            node = self.delItem(path)
+            return node.value
+        except KeyError:
+            return default
+
+    # ==================== Iteration ====================
+
+    def keys(self) -> list[str]:
+        """Return list of labels at this level."""
+        return list(self._nodes.keys())
+
+    def values(self) -> list[Any]:
+        """Return list of values at this level."""
+        return [n.value for n in self._nodes.values()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        """Return list of (label, value) pairs."""
+        return [(n.label, n.value) for n in self._nodes.values()]
+
+    def nodes(self) -> list[TreeStoreNode]:
+        """Return list of nodes at this level."""
+        return list(self._nodes.values())
+
+    def getNodes(self, path: str = '') -> list[TreeStoreNode]:
+        """Get nodes at path (or root if empty).
+
+        Args:
+            path: Optional path to get nodes from.
+
+        Returns:
+            List of TreeStoreNode at the specified level.
+        """
+        if not path:
+            return list(self._nodes.values())
+
+        node = self.getNode(path)
+        if node.is_branch:
+            return list(node.value._nodes.values())
+        return []
+
+    # ==================== Digest ====================
+
+    def digest(self, what: str = '#k,#v') -> list[Any]:
+        """Extract data from nodes using Bag-style digest syntax.
+
+        Args:
+            what: Comma-separated specifiers:
+                - #k: labels
+                - #v: values
+                - #a: all attributes (dict)
+                - #a.attrname: specific attribute
+
+        Returns:
+            List of values, or list of tuples if multiple specifiers.
 
         Example:
-            >>> child_store._.other_method()  # go up one level
+            >>> store.digest('#k')  # ['label1', 'label2']
+            >>> store.digest('#v')  # [value1, value2]
+            >>> store.digest('#k,#v')  # [('label1', val1), ('label2', val2)]
+            >>> store.digest('#a.color')  # ['red', 'blue']
         """
-        if self.parent is None:
-            raise ValueError("Already at root level")
-        if self.parent.parent is None:
-            raise ValueError("Already at root level")
-        return self.parent.parent
+        specs = [s.strip() for s in what.split(',')]
+        results: list[list[Any]] = []
+
+        for spec in specs:
+            if spec == '#k':
+                results.append([n.label for n in self._nodes.values()])
+            elif spec == '#v':
+                results.append([n.value for n in self._nodes.values()])
+            elif spec == '#a':
+                results.append([n.attr for n in self._nodes.values()])
+            elif spec.startswith('#a.'):
+                attr_name = spec[3:]
+                results.append([n.attr.get(attr_name) for n in self._nodes.values()])
+            else:
+                raise ValueError(f"Unknown digest specifier: {spec}")
+
+        if len(results) == 1:
+            return results[0]
+
+        # Zip multiple results into tuples
+        return list(zip(*results))
+
+    # ==================== Walk ====================
+
+    def walk(
+        self,
+        callback: Callable[[TreeStoreNode], Any] | None = None,
+        _prefix: str = ""
+    ) -> Iterator[tuple[str, TreeStoreNode]] | None:
+        """Walk the tree, optionally calling a callback on each node.
+
+        Args:
+            callback: Optional function to call on each node.
+                      If provided, walk returns None.
+            _prefix: Internal use for path building.
+
+        Yields:
+            Tuples of (path, node) if no callback provided.
+
+        Example:
+            >>> for path, node in store.walk():
+            ...     print(path, node.value)
+
+            >>> store.walk(lambda n: print(n.label))
+        """
+        if callback is not None:
+            # Callback mode (like Bag)
+            for node in self._nodes.values():
+                callback(node)
+                if node.is_branch:
+                    node.value.walk(callback)
+            return None
+
+        # Generator mode
+        def _walk_gen(store: TreeStore, prefix: str) -> Iterator[tuple[str, TreeStoreNode]]:
+            for label, node in store._nodes.items():
+                path = f"{prefix}.{label}" if prefix else label
+                yield path, node
+                if node.is_branch:
+                    yield from _walk_gen(node.value, path)
+
+        return _walk_gen(self, _prefix)
+
+    # ==================== Navigation ====================
 
     @property
     def root(self) -> TreeStore:
         """Get the root TreeStore of this hierarchy."""
         if self.parent is None:
             return self
-        return self.parent.root
+        return self.parent.parent.root if self.parent.parent else self
 
     @property
     def depth(self) -> int:
@@ -271,169 +617,12 @@ class TreeStore:
             return 0
         return self.parent.parent.depth + 1 if self.parent.parent else 1
 
-    def _generate_label(self, tag: str) -> str:
-        """Generate a unique label for a tag.
+    @property
+    def parentNode(self) -> TreeStoreNode | None:
+        """Get the parent node (alias for self.parent)."""
+        return self.parent
 
-        Uses pattern: tag_0, tag_1, tag_2, ...
-        Counter always increments (never reuses numbers).
-        """
-        n = self._tag_counters.get(tag, 0)
-        self._tag_counters[tag] = n + 1
-        return f"{tag}_{n}"
-
-    def _is_auto_label(self, label: str, tag: str) -> bool:
-        """Check if a label was auto-generated.
-
-        Auto labels match pattern: {tag}_{number}
-        """
-        pattern = f"^{re.escape(tag)}_\\d+$"
-        return bool(re.match(pattern, label))
-
-    def child(
-        self,
-        tag: str,
-        label: str | None = None,
-        value: Any = None,
-        attributes: dict[str, Any] | None = None,
-        **attr
-    ) -> TreeStore | TreeStoreNode:
-        """Create a child node.
-
-        Args:
-            tag: The node's type (e.g., 'div', 'ul').
-            label: Explicit label (optional, auto-generated if None).
-            value: If provided, creates a leaf node; otherwise creates a branch.
-            attributes: Dict of attributes (merged with **attr).
-            **attr: Node attributes as kwargs.
-
-        Returns:
-            TreeStore if branch (for adding children), TreeStoreNode if leaf.
-
-        Examples:
-            >>> div = store.child('div', color='red')  # branch, label='div_0'
-            >>> store.child('div', label='main')       # branch, label='main'
-            >>> store.child('li', value='Hello')       # leaf, label='li_0'
-            >>> store.child('li', label='item1', value='Hello')  # leaf, label='item1'
-        """
-        # Merge attributes dict with kwargs, add _tag
-        final_attr: dict[str, Any] = {'_tag': tag}
-        if attributes:
-            final_attr.update(attributes)
-        final_attr.update(attr)
-
-        # Generate label if not provided
-        if label is None:
-            label = self._generate_label(tag)
-
-        # Validate child if constraints exist
-        self._validate_child(tag)
-
-        if value is not None:
-            # Create leaf node
-            node = TreeStoreNode(label, final_attr, value, parent=self)
-            self.nodes[label] = node
-            return node
-        else:
-            # Create branch node with TreeStore as value
-            child_store = self.__class__.__new__(self.__class__)
-            child_store.nodes = {}
-            child_store.parent = None
-            child_store._tag = None
-            child_store._tag_counters = {}
-
-            node = TreeStoreNode(label, final_attr, value=child_store, parent=self)
-            child_store.parent = node  # Dual relationship
-            child_store._tag = tag  # For validation context
-            self.nodes[label] = node
-            return child_store
-
-    def _get_valid_children(self) -> dict[str, tuple[int, int | None]] | None:
-        """Get valid children constraints for this store's context."""
-        # This is overridden in typed builders
-        return None
-
-    def _validate_child(self, tag: str) -> None:
-        """Validate that a child tag is allowed."""
-        valid = self._get_valid_children()
-        if valid is None:
-            return
-
-        if tag not in valid:
-            raise InvalidChildError(
-                f"Tag '{tag}' is not valid here. Allowed: {list(valid.keys())}"
-            )
-
-        # Check max count
-        min_count, max_count = valid[tag]
-        current_count = sum(1 for n in self.nodes.values() if n.tag == tag)
-        if max_count is not None and current_count >= max_count:
-            raise TooManyChildrenError(
-                f"Maximum {max_count} '{tag}' children allowed, "
-                f"already have {current_count}"
-            )
-
-    def get(self, label: str, default: Any = None) -> TreeStoreNode | Any:
-        """Get a node by label, with optional default."""
-        return self.nodes.get(label, default)
-
-    def keys(self) -> Iterator[str]:
-        """Iterate over node labels."""
-        return iter(self.nodes.keys())
-
-    def values(self) -> Iterator[TreeStoreNode]:
-        """Iterate over nodes."""
-        return iter(self.nodes.values())
-
-    def items(self) -> Iterator[tuple[str, TreeStoreNode]]:
-        """Iterate over (label, node) pairs."""
-        return iter(self.nodes.items())
-
-    def by_tag(self, tag: str) -> list[TreeStoreNode]:
-        """Get all nodes with the given tag."""
-        return [n for n in self.nodes.values() if n.tag == tag]
-
-    def pop(self, label: str) -> TreeStoreNode:
-        """Remove and return a node by label."""
-        return self.nodes.pop(label)
-
-    def reindex(self) -> None:
-        """Renumber auto-generated labels to remove gaps.
-
-        Only affects labels matching pattern {tag}_{number}.
-        Explicit labels are left unchanged.
-
-        Example:
-            Before: div_0, div_3, div_7, main
-            After:  div_0, div_1, div_2, main
-        """
-        # Group nodes by tag
-        by_tag: dict[str, list[tuple[str, TreeStoreNode]]] = {}
-        for label, node in list(self.nodes.items()):
-            if self._is_auto_label(label, node.tag):
-                by_tag.setdefault(node.tag, []).append((label, node))
-
-        # Renumber each tag group
-        for tag, nodes in by_tag.items():
-            # Sort by current number to preserve order
-            nodes.sort(key=lambda x: int(x[0].rsplit('_', 1)[1]))
-
-            # Remove old labels
-            for old_label, _ in nodes:
-                del self.nodes[old_label]
-
-            # Add with new labels
-            for i, (_, node) in enumerate(nodes):
-                new_label = f"{tag}_{i}"
-                node.label = new_label
-                self.nodes[new_label] = node
-
-            # Reset counter
-            self._tag_counters[tag] = len(nodes)
-
-        # Recursively reindex children
-        for node in self.nodes.values():
-            if node.is_branch:
-                node.value.reindex()
+    # ==================== Conversion ====================
 
     def as_dict(self) -> dict[str, Any]:
         """Convert to plain dict (recursive).
@@ -442,35 +631,33 @@ class TreeStore:
         Leaf nodes become their value directly (or dict with _value if has attrs).
         """
         result: dict[str, Any] = {}
-        for label, node in self.nodes.items():
+        for label, node in self._nodes.items():
             if node.is_branch:
                 child_dict = node.value.as_dict()
-                # Start with attributes (includes _tag if set)
-                node_dict = dict(node.attr)
-                node_dict.update(child_dict)
-                result[label] = node_dict
+                if node.attr:
+                    node_dict = dict(node.attr)
+                    node_dict.update(child_dict)
+                    result[label] = node_dict
+                else:
+                    result[label] = child_dict
             else:
-                # Leaf: check if has meaningful attrs beyond _tag
-                other_attrs = {k: v for k, v in node.attr.items() if k != '_tag'}
-                if other_attrs:
+                if node.attr:
                     result[label] = {'_value': node.value, **node.attr}
                 else:
                     result[label] = node.value
         return result
 
-    def walk(
-        self, _prefix: str = ""
-    ) -> Iterator[tuple[str, TreeStoreNode]]:
-        """Iterate over all paths and nodes.
+    def clear(self) -> None:
+        """Remove all nodes."""
+        self._nodes.clear()
+        self._tag_counters.clear()
 
-        Yields:
-            Tuples of (path, node) for each node in the tree.
-        """
-        for label, node in self.nodes.items():
-            path = f"{_prefix}.{label}" if _prefix else label
-            yield path, node
-            if node.is_branch:
-                yield from node.value.walk(_prefix=path)
+    def get(self, label: str, default: Any = None) -> TreeStoreNode | None:
+        """Get node by label at this level, with default."""
+        return self._nodes.get(label, default)
+
+
+# ==================== Builder Pattern ====================
 
 
 def valid_children(*allowed: str, **constraints: str) -> Callable:
@@ -547,20 +734,45 @@ class TooManyChildrenError(Exception):
 
 
 class TreeStoreBuilder(TreeStore):
-    """Base class for typed builders with validation.
+    """Builder pattern for TreeStore with auto-labeling and validation.
 
-    Subclass this to create domain-specific builders (HTML, XML, etc.)
-    with typed methods and @valid_children validation.
+    Use child() to create nodes with auto-generated labels (tag_N pattern).
+    Subclass to create domain-specific builders with @valid_children.
 
     Example:
         >>> class HtmlBuilder(TreeStoreBuilder):
         ...     @valid_children('li')
-        ...     def ul(self, label: str = None, **attr) -> TreeStore:
-        ...         return self.child('ul', label, **attr)
+        ...     def ul(self, **attr):
+        ...         return self.child('ul', **attr)
         ...
-        ...     def li(self, value: str = None, label: str = None, **attr):
-        ...         return self.child('li', label, value=value, **attr)
+        ...     def li(self, value=None, **attr):
+        ...         return self.child('li', value=value, **attr)
+        ...
+        >>> builder = HtmlBuilder()
+        >>> ul = builder.ul()
+        >>> ul.li('Item 1')
+        >>> ul.li('Item 2')
     """
+
+    @property
+    def store(self) -> TreeStore:
+        """Access the underlying TreeStore."""
+        return self
+
+    def _generate_label(self, tag: str) -> str:
+        """Generate a unique label for a tag.
+
+        Uses pattern: tag_0, tag_1, tag_2, ...
+        Counter always increments (never reuses numbers).
+        """
+        n = self._tag_counters.get(tag, 0)
+        self._tag_counters[tag] = n + 1
+        return f"{tag}_{n}"
+
+    def _is_auto_label(self, label: str, tag: str) -> bool:
+        """Check if a label was auto-generated."""
+        pattern = f"^{re.escape(tag)}_\\d+$"
+        return bool(re.match(pattern, label))
 
     def _get_valid_children(self) -> dict[str, tuple[int, int | None]] | None:
         """Get valid children from the method that created this context."""
@@ -579,3 +791,122 @@ class TreeStoreBuilder(TreeStore):
             return None
 
         return getattr(method, '_valid_children', None)
+
+    def _validate_child(self, tag: str) -> None:
+        """Validate that a child tag is allowed."""
+        valid = self._get_valid_children()
+        if valid is None:
+            return
+
+        if tag not in valid:
+            raise InvalidChildError(
+                f"Tag '{tag}' is not valid here. Allowed: {list(valid.keys())}"
+            )
+
+        # Check max count
+        min_count, max_count = valid[tag]
+        current_count = sum(1 for n in self._nodes.values() if n.tag == tag)
+        if max_count is not None and current_count >= max_count:
+            raise TooManyChildrenError(
+                f"Maximum {max_count} '{tag}' children allowed, "
+                f"already have {current_count}"
+            )
+
+    def child(
+        self,
+        tag: str,
+        label: str | None = None,
+        value: Any = None,
+        attributes: dict[str, Any] | None = None,
+        **attr: Any
+    ) -> TreeStoreBuilder | TreeStoreNode:
+        """Create a child node with auto-generated label.
+
+        Args:
+            tag: The node's type (e.g., 'div', 'ul').
+            label: Explicit label (optional, auto-generated if None).
+            value: If provided, creates a leaf node; otherwise creates a branch.
+            attributes: Dict of attributes (merged with **attr).
+            **attr: Node attributes as kwargs.
+
+        Returns:
+            TreeStoreBuilder if branch (for adding children), TreeStoreNode if leaf.
+
+        Examples:
+            >>> div = builder.child('div', color='red')  # branch, label='div_0'
+            >>> builder.child('li', value='Hello')       # leaf, label='li_0'
+        """
+        # Merge attributes, add _tag
+        final_attr: dict[str, Any] = {'_tag': tag}
+        if attributes:
+            final_attr.update(attributes)
+        final_attr.update(attr)
+
+        # Generate label if not provided
+        if label is None:
+            label = self._generate_label(tag)
+
+        # Validate child if constraints exist
+        self._validate_child(tag)
+
+        if value is not None:
+            # Create leaf node
+            node = TreeStoreNode(label, final_attr, value, parent=self)
+            self._nodes[label] = node
+            return node
+        else:
+            # Create branch node with new Builder instance
+            child_builder = self.__class__.__new__(self.__class__)
+            child_builder._nodes = {}
+            child_builder.parent = None
+            child_builder._tag = None
+            child_builder._tag_counters = {}
+
+            node = TreeStoreNode(label, final_attr, value=child_builder, parent=self)
+            child_builder.parent = node
+            child_builder._tag = tag  # For validation context
+            self._nodes[label] = node
+            return child_builder
+
+    def reindex(self) -> None:
+        """Renumber auto-generated labels to remove gaps.
+
+        Only affects labels matching pattern {tag}_{number}.
+        Explicit labels are left unchanged.
+
+        Example:
+            Before: div_0, div_3, div_7, main
+            After:  div_0, div_1, div_2, main
+        """
+        # Group nodes by tag
+        by_tag: dict[str, list[tuple[str, TreeStoreNode]]] = {}
+        for label, node in list(self._nodes.items()):
+            if node.tag and self._is_auto_label(label, node.tag):
+                by_tag.setdefault(node.tag, []).append((label, node))
+
+        # Renumber each tag group
+        for tag, tag_nodes in by_tag.items():
+            # Sort by current number to preserve order
+            tag_nodes.sort(key=lambda x: int(x[0].rsplit('_', 1)[1]))
+
+            # Remove old labels
+            for old_label, _ in tag_nodes:
+                del self._nodes[old_label]
+
+            # Add with new labels
+            for i, (_, node) in enumerate(tag_nodes):
+                new_label = f"{tag}_{i}"
+                node.label = new_label
+                self._nodes[new_label] = node
+
+            # Reset counter
+            self._tag_counters[tag] = len(tag_nodes)
+
+        # Recursively reindex children
+        for node in self._nodes.values():
+            if node.is_branch and isinstance(node.value, TreeStoreBuilder):
+                node.value.reindex()
+
+    def by_tag(self, tag: str) -> list[TreeStoreNode]:
+        """Get all nodes with the given tag."""
+        return [n for n in self._nodes.values() if n.tag == tag]
