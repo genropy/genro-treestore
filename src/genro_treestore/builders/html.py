@@ -155,12 +155,13 @@ class HtmlBuilder(BuilderBase):
 
         raise AttributeError(f"'{name}' is not a valid HTML tag")
 
-    def _make_tag_method(self, tag: str) -> Callable[..., TreeStore | TreeStoreNode]:
+    def _make_tag_method(self, name: str) -> Callable[..., TreeStore | TreeStoreNode]:
         """Create a method for a specific tag."""
-        is_void = tag in VOID_ELEMENTS
+        is_void = name in VOID_ELEMENTS
 
         def tag_method(
             target: TreeStore,
+            tag: str = name,
             value: Any = None,
             **attr: Any
         ) -> TreeStore | TreeStoreNode:

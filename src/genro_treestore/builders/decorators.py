@@ -65,28 +65,34 @@ def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
     return tag, min_count, max_count
 
 
-def element(children: tuple[str, ...] = ()) -> Callable:
+def element(children: str | tuple[str, ...] = '') -> Callable:
     """Decorator to specify valid children tags for a builder method.
 
     The decorated method's name is used as the parent tag.
     The validation rules are stored on the method for later use by validate().
 
     Args:
-        children: Tuple of valid child tag specs. Each can be:
+        children: Valid child tag specs. Can be:
+            - A comma-separated string: 'tag1, tag2[:1], tag3[1:]'
+            - A tuple of strings: ('tag1', 'tag2[:1]', 'tag3[1:]')
+
+            Each spec can be:
             - 'tag' - allowed, no cardinality constraint (0..∞)
             - 'tag[n]' - exactly n required
             - 'tag[n:]' - at least n required
             - 'tag[:m]' - at most m allowed
             - 'tag[n:m]' - between n and m (inclusive)
-            Empty tuple means no children allowed (leaf node).
+            Empty string or empty tuple means no children allowed (leaf node).
 
     Example:
         >>> class MyBuilder(BuilderBase):
-        ...     @element(children=('section', 'item[1:]'))  # item required
+        ...     # String syntax
+        ...     @element(children='section, item[1:]')
         ...     def menu(self, target, **attr):
         ...         return self.child(target, 'menu', **attr)
         ...
-        ...     @element(children=('fridge[:1]', 'oven[:2]', 'sink', 'table', 'chair'))
+        ...     # Tuple syntax
+        ...     @element(children=('fridge[:1]', 'oven[:2]', 'sink', 'table'))
         ...     def kitchen(self, target, **attr):
         ...         return self.child(target, 'kitchen', **attr)
         ...
@@ -94,9 +100,15 @@ def element(children: tuple[str, ...] = ()) -> Callable:
         ...     def item(self, target, **attr):
         ...         return self.child(target, 'item', value='', **attr)
     """
-    # Parse all tag specs
+    # Parse all tag specs - accept both string and tuple
     parsed: dict[str, tuple[int, int | None]] = {}
-    for spec in children:
+
+    if isinstance(children, str):
+        specs = [s.strip() for s in children.split(',') if s.strip()]
+    else:
+        specs = list(children)
+
+    for spec in specs:
         tag, min_c, max_c = _parse_tag_spec(spec)
         parsed[tag] = (min_c, max_c)
 

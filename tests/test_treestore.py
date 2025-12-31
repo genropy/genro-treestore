@@ -808,14 +808,14 @@ class TestBuilderBase:
     def test_custom_builder(self):
         """Test creating custom builder subclass."""
         class MyBuilder(BuilderBase):
-            def custom_tag(self, target, value=None, **attr):
-                return self.child(target, 'custom', value=value, **attr)
+            def custom_tag(self, target, tag, value=None, **attr):
+                return self.child(target, tag, value=value, **attr)
 
         store = TreeStore(builder=MyBuilder())
         store.custom_tag(value='test', data='123')
 
-        node = store.get_node('custom_0')
-        assert node.tag == 'custom'
+        node = store.get_node('custom_tag_0')
+        assert node.tag == 'custom_tag'
         assert node.value == 'test'
         assert node.attr['data'] == '123'
 

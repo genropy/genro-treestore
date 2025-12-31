@@ -229,7 +229,7 @@ class TreeStore:
             # Let the builder raise its own AttributeError with a descriptive message
             handler = getattr(self._builder, name)
             if callable(handler):
-                return lambda **attr: handler(self, **attr)
+                return lambda **attr: handler(self, tag=name, **attr)
 
         raise AttributeError(
             f"'{type(self).__name__}' object has no attribute '{name}'"
