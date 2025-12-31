@@ -736,3 +736,131 @@ class TestIntegration:
         assert store['html.body.ul.li1'] == 'A'
         assert store['html.body.ul.li2'] == 'B'
         assert store['html.body.ul.li3'] == 'C'
+
+
+class TestPositionParameter:
+    """Tests for _position parameter in setItem and child()."""
+
+    def test_setItem_position_append_default(self):
+        """Test setItem appends by default."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        assert store.keys() == ['a', 'b', 'c']
+
+    def test_setItem_position_prepend(self):
+        """Test setItem with _position='<' inserts at beginning."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('first', 0, _position='<')
+        assert store.keys() == ['first', 'a', 'b']
+        assert store['#0'] == 0
+        assert store['#1'] == 1
+
+    def test_setItem_position_before_label(self):
+        """Test setItem with _position='<label' inserts before label."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='<b')
+        assert store.keys() == ['a', 'inserted', 'b', 'c']
+        assert store['#1'] == 99
+        assert store['#2'] == 2
+
+    def test_setItem_position_after_label(self):
+        """Test setItem with _position='>label' inserts after label."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='>a')
+        assert store.keys() == ['a', 'inserted', 'b', 'c']
+        assert store['#0'] == 1
+        assert store['#1'] == 99
+
+    def test_setItem_position_before_index(self):
+        """Test setItem with _position='<#N' inserts before position N."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='<#1')
+        assert store.keys() == ['a', 'inserted', 'b', 'c']
+        assert store['#1'] == 99
+
+    def test_setItem_position_after_index(self):
+        """Test setItem with _position='>#N' inserts after position N."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='>#0')
+        assert store.keys() == ['a', 'inserted', 'b', 'c']
+        assert store['#1'] == 99
+
+    def test_setItem_position_at_index(self):
+        """Test setItem with _position='#N' inserts at exact position N."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='#1')
+        assert store.keys() == ['a', 'inserted', 'b', 'c']
+        assert store['#1'] == 99
+
+    def test_setItem_position_negative_index(self):
+        """Test setItem with negative position index."""
+        store = TreeStore()
+        store.setItem('a', 1)
+        store.setItem('b', 2)
+        store.setItem('c', 3)
+        store.setItem('inserted', 99, _position='<#-1')  # before last
+        assert store.keys() == ['a', 'b', 'inserted', 'c']
+
+    def test_setItem_position_branch(self):
+        """Test _position works for branch nodes too."""
+        store = TreeStore()
+        store.setItem('first')
+        store.setItem('last')
+        store.setItem('middle', _position='<last')
+        assert store.keys() == ['first', 'middle', 'last']
+
+    def test_builder_child_position_prepend(self):
+        """Test child() with _position='<' inserts at beginning."""
+        builder = TreeStoreBuilder()
+        builder.child('div')
+        builder.child('div')
+        builder.child('div', _position='<')
+        assert builder.keys() == ['div_2', 'div_0', 'div_1']
+        assert builder['#0?'] is None  # div_2 is first
+        assert builder.getNode('#0').tag == 'div'
+
+    def test_builder_child_position_before_label(self):
+        """Test child() with _position='<label' inserts before label."""
+        builder = TreeStoreBuilder()
+        builder.child('div', label='first')
+        builder.child('div', label='last')
+        builder.child('div', label='middle', _position='<last')
+        assert builder.keys() == ['first', 'middle', 'last']
+
+    def test_builder_child_position_at_index(self):
+        """Test child() with _position='#N' inserts at position."""
+        builder = TreeStoreBuilder()
+        builder.child('li', value='A')
+        builder.child('li', value='B')
+        builder.child('li', value='C')
+        builder.child('li', value='INSERTED', _position='#1')
+        assert [builder[f'#{ i}'] for i in range(4)] == ['A', 'INSERTED', 'B', 'C']
+
+    def test_position_with_path(self):
+        """Test _position works with nested paths."""
+        store = TreeStore()
+        store.setItem('container.a', 1)
+        store.setItem('container.b', 2)
+        store.setItem('container.c', 3)
+        store.setItem('container.inserted', 99, _position='<b')
+        container = store.getNode('container').value
+        assert container.keys() == ['a', 'inserted', 'b', 'c']

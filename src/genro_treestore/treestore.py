@@ -343,6 +343,7 @@ class TreeStore:
         path: str,
         value: Any = None,
         _attributes: dict[str, Any] | None = None,
+        _position: str | None = None,
         **kwargs: Any
     ) -> TreeStore:
         """Set an item at the given path, creating intermediate nodes as needed.
@@ -351,6 +352,14 @@ class TreeStore:
             path: Dotted path to the item (e.g., 'html.body.div').
             value: The value to store. If None, creates a branch node.
             _attributes: Dictionary of attributes.
+            _position: Position specifier (Bag-style):
+                - None or '>': append to end (default)
+                - '<': insert at beginning
+                - '<label': insert before label
+                - '>label': insert after label
+                - '<#N': insert before position N
+                - '>#N': insert after position N
+                - '#N': insert at exact position N
             **kwargs: Additional attributes as keyword arguments.
 
         Returns:
@@ -361,6 +370,7 @@ class TreeStore:
         Example:
             >>> store.setItem('html').setItem('body').setItem('div', color='red')
             >>> store.setItem('ul').setItem('li', 'Item 1').setItem('li', 'Item 2')
+            >>> store.setItem('first', 'value', _position='<')  # insert at beginning
         """
         parent_store, label = self._htraverse(path, autocreate=True)
 
@@ -386,14 +396,14 @@ class TreeStore:
         if value is not None:
             # Leaf node
             node = TreeStoreNode(label, final_attr, value, parent=parent_store)
-            parent_store._insert_node(node)
+            parent_store._insert_node(node, _position)
             return parent_store  # Return parent for chaining siblings
         else:
             # Branch node
             child_store = TreeStore()
             node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
             child_store.parent = node
-            parent_store._insert_node(node)
+            parent_store._insert_node(node, _position)
             return child_store  # Return child store for chaining children
 
     def getItem(self, path: str, default: Any = None) -> Any:
@@ -561,21 +571,40 @@ class TreeStore:
 
     # ==================== Iteration ====================
 
+    def iter_keys(self) -> Iterator[str]:
+        """Yield labels at this level in insertion order."""
+        for n in self._order:
+            yield n.label
+
+    def iter_values(self) -> Iterator[Any]:
+        """Yield values at this level in insertion order."""
+        for n in self._order:
+            yield n.value
+
+    def iter_items(self) -> Iterator[tuple[str, Any]]:
+        """Yield (label, value) pairs in insertion order."""
+        for n in self._order:
+            yield n.label, n.value
+
+    def iter_nodes(self) -> Iterator[TreeStoreNode]:
+        """Yield nodes at this level in insertion order."""
+        yield from self._order
+
     def keys(self) -> list[str]:
-        """Return list of labels at this level."""
-        return list(self._nodes.keys())
+        """Return list of labels at this level in insertion order."""
+        return list(self.iter_keys())
 
     def values(self) -> list[Any]:
-        """Return list of values at this level."""
-        return [n.value for n in self._nodes.values()]
+        """Return list of values at this level in insertion order."""
+        return list(self.iter_values())
 
     def items(self) -> list[tuple[str, Any]]:
-        """Return list of (label, value) pairs."""
-        return [(n.label, n.value) for n in self._nodes.values()]
+        """Return list of (label, value) pairs in insertion order."""
+        return list(self.iter_items())
 
     def nodes(self) -> list[TreeStoreNode]:
-        """Return list of nodes at this level."""
-        return list(self._nodes.values())
+        """Return list of nodes at this level in insertion order."""
+        return list(self.iter_nodes())
 
     def getNodes(self, path: str = '') -> list[TreeStoreNode]:
         """Get nodes at path (or root if empty).
@@ -584,17 +613,56 @@ class TreeStore:
             path: Optional path to get nodes from.
 
         Returns:
-            List of TreeStoreNode at the specified level.
+            List of TreeStoreNode at the specified level in insertion order.
         """
         if not path:
-            return list(self._nodes.values())
+            return list(self._order)
 
         node = self.getNode(path)
         if node.is_branch:
-            return list(node.value._nodes.values())
+            return list(node.value._order)
         return []
 
     # ==================== Digest ====================
+
+    def iter_digest(self, what: str = '#k,#v') -> Iterator[Any]:
+        """Yield data from nodes using Bag-style digest syntax.
+
+        Args:
+            what: Comma-separated specifiers:
+                - #k: labels
+                - #v: values
+                - #a: all attributes (dict)
+                - #a.attrname: specific attribute
+
+        Yields:
+            Values, or tuples if multiple specifiers.
+
+        Example:
+            >>> for label in store.iter_digest('#k'):
+            ...     print(label)
+        """
+        specs = [s.strip() for s in what.split(',')]
+
+        def _extract(node: TreeStoreNode, spec: str) -> Any:
+            if spec == '#k':
+                return node.label
+            elif spec == '#v':
+                return node.value
+            elif spec == '#a':
+                return node.attr
+            elif spec.startswith('#a.'):
+                return node.attr.get(spec[3:])
+            else:
+                raise ValueError(f"Unknown digest specifier: {spec}")
+
+        if len(specs) == 1:
+            spec = specs[0]
+            for node in self._order:
+                yield _extract(node, spec)
+        else:
+            for node in self._order:
+                yield tuple(_extract(node, spec) for spec in specs)
 
     def digest(self, what: str = '#k,#v') -> list[Any]:
         """Extract data from nodes using Bag-style digest syntax.
@@ -615,27 +683,7 @@ class TreeStore:
             >>> store.digest('#k,#v')  # [('label1', val1), ('label2', val2)]
             >>> store.digest('#a.color')  # ['red', 'blue']
         """
-        specs = [s.strip() for s in what.split(',')]
-        results: list[list[Any]] = []
-
-        for spec in specs:
-            if spec == '#k':
-                results.append([n.label for n in self._nodes.values()])
-            elif spec == '#v':
-                results.append([n.value for n in self._nodes.values()])
-            elif spec == '#a':
-                results.append([n.attr for n in self._nodes.values()])
-            elif spec.startswith('#a.'):
-                attr_name = spec[3:]
-                results.append([n.attr.get(attr_name) for n in self._nodes.values()])
-            else:
-                raise ValueError(f"Unknown digest specifier: {spec}")
-
-        if len(results) == 1:
-            return results[0]
-
-        # Zip multiple results into tuples
-        return list(zip(*results))
+        return list(self.iter_digest(what))
 
     # ==================== Walk ====================
 
@@ -662,7 +710,7 @@ class TreeStore:
         """
         if callback is not None:
             # Callback mode (like Bag)
-            for node in self._nodes.values():
+            for node in self._order:
                 callback(node)
                 if node.is_branch:
                     node.value.walk(callback)
@@ -670,8 +718,8 @@ class TreeStore:
 
         # Generator mode
         def _walk_gen(store: TreeStore, prefix: str) -> Iterator[tuple[str, TreeStoreNode]]:
-            for label, node in store._nodes.items():
-                path = f"{prefix}.{label}" if prefix else label
+            for node in store._order:
+                path = f"{prefix}.{node.label}" if prefix else node.label
                 yield path, node
                 if node.is_branch:
                     yield from _walk_gen(node.value, path)
@@ -708,7 +756,8 @@ class TreeStore:
         Leaf nodes become their value directly (or dict with _value if has attrs).
         """
         result: dict[str, Any] = {}
-        for label, node in self._nodes.items():
+        for node in self._order:
+            label = node.label
             if node.is_branch:
                 child_dict = node.value.as_dict()
                 if node.attr:
@@ -908,6 +957,7 @@ class TreeStoreBuilder(TreeStore):
         label: str | None = None,
         value: Any = None,
         attributes: dict[str, Any] | None = None,
+        _position: str | None = None,
         **attr: Any
     ) -> TreeStoreBuilder | BuilderNode:
         """Create a child node with auto-generated label.
@@ -917,6 +967,14 @@ class TreeStoreBuilder(TreeStore):
             label: Explicit label (optional, auto-generated if None).
             value: If provided, creates a leaf node; otherwise creates a branch.
             attributes: Dict of attributes (merged with **attr).
+            _position: Position specifier (Bag-style):
+                - None or '>': append to end (default)
+                - '<': insert at beginning
+                - '<label': insert before label
+                - '>label': insert after label
+                - '<#N': insert before position N
+                - '>#N': insert after position N
+                - '#N': insert at exact position N
             **attr: Node attributes as kwargs.
 
         Returns:
@@ -925,6 +983,7 @@ class TreeStoreBuilder(TreeStore):
         Examples:
             >>> div = builder.child('div', color='red')  # branch, label='div_0'
             >>> builder.child('li', value='Hello')       # leaf, label='li_0'
+            >>> builder.child('li', value='First', _position='<')  # insert at beginning
         """
         # Merge attributes
         final_attr: dict[str, Any] = {}
@@ -942,14 +1001,14 @@ class TreeStoreBuilder(TreeStore):
         if value is not None:
             # Create leaf node
             node = self.node_factory(label, final_attr, value, parent=self, tag=tag)
-            self._insert_node(node)
+            self._insert_node(node, _position)
             return node
         else:
             # Create branch node with new Builder instance
             child_builder = self.__class__()
             node = self.node_factory(label, final_attr, value=child_builder, parent=self, tag=tag)
             child_builder.parent = node
-            self._insert_node(node)
+            self._insert_node(node, _position)
             return child_builder
 
     def reindex(self) -> None:
