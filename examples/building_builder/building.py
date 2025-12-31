@@ -176,65 +176,17 @@ class BuildingBuilder(BuilderBase):
         return self.child(target, tag, value=None, **attr)
 
     # === Appliances and fixtures (leaf elements) ===
+    # Using tags parameter to map multiple tags to same method
 
-    @element()
-    def fridge(self, target: TreeStore, tag: str, brand: str = '', **attr) -> TreeStoreNode:
-        """Create a fridge. Leaf element."""
-        return self.child(target, tag, value='', brand=brand, **attr)
-
-    @element()
-    def oven(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create an oven. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def sink(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a sink. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def toilet(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a toilet. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def shower(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a shower. Leaf element."""
+    @element(tags='fridge, oven, sink, toilet, shower')
+    def appliance(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
+        """Create an appliance/fixture. Leaf element."""
         return self.child(target, tag, value='', **attr)
 
     # === Furniture (leaf elements) ===
+    # Using tags parameter to map multiple tags to same method
 
-    @element()
-    def bed(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a bed. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def wardrobe(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a wardrobe. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def desk(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a desk. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def table(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a table. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def chair(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a chair. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def sofa(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a sofa. Leaf element."""
-        return self.child(target, tag, value='', **attr)
-
-    @element()
-    def tv(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a TV. Leaf element."""
+    @element(tags='bed, wardrobe, desk, table, chair, sofa, tv')
+    def furniture(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
+        """Create a piece of furniture. Leaf element."""
         return self.child(target, tag, value='', **attr)
