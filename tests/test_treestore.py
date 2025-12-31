@@ -13,6 +13,7 @@ from genro_treestore import (
     InvalidChildError,
     MissingChildError,
     TooManyChildrenError,
+    Grammar,
 )
 from genro_treestore.treestore import _parse_cardinality
 
@@ -91,6 +92,121 @@ class TestTreeStoreNode:
         assert node.attr == {'color': 'red', 'size': 10}
         node.setAttr(color='blue')
         assert node.attr['color'] == 'blue'
+
+
+class TestTreeStoreSource:
+    """Tests for TreeStore source parameter."""
+
+    def test_source_from_simple_dict(self):
+        """Test creating TreeStore from simple dict."""
+        store = TreeStore({'a': 1, 'b': 2, 'c': 'hello'})
+        assert store['a'] == 1
+        assert store['b'] == 2
+        assert store['c'] == 'hello'
+
+    def test_source_from_nested_dict(self):
+        """Test creating TreeStore from nested dict."""
+        store = TreeStore({
+            'config': {
+                'database': {
+                    'host': 'localhost',
+                    'port': 5432,
+                }
+            }
+        })
+        assert store['config.database.host'] == 'localhost'
+        assert store['config.database.port'] == 5432
+
+    def test_source_from_dict_with_attributes(self):
+        """Test creating TreeStore from dict with _attr keys."""
+        store = TreeStore({
+            'item': {
+                '_color': 'red',
+                '_size': 10,
+                '_value': 'hello',
+            }
+        })
+        assert store['item'] == 'hello'
+        assert store['item?color'] == 'red'
+        assert store['item?size'] == 10
+
+    def test_source_from_dict_with_children_and_attributes(self):
+        """Test dict with both children and attributes."""
+        store = TreeStore({
+            'div': {
+                '_class': 'container',
+                'span': 'text',
+            }
+        })
+        assert store['div?class'] == 'container'
+        assert store['div.span'] == 'text'
+
+    def test_source_from_treestore(self):
+        """Test copying from another TreeStore."""
+        original = TreeStore()
+        original.setItem('a', 1, color='red')
+        original.setItem('b.c', 2)
+
+        copy = TreeStore(original)
+
+        assert copy['a'] == 1
+        assert copy['a?color'] == 'red'
+        assert copy['b.c'] == 2
+
+        # Verify it's a copy, not a reference
+        original['a'] = 999
+        assert copy['a'] == 1
+
+    def test_source_from_list_simple(self):
+        """Test creating TreeStore from list of tuples."""
+        store = TreeStore([
+            ('a', 1),
+            ('b', 2),
+            ('c', 'hello'),
+        ])
+        assert store['a'] == 1
+        assert store['b'] == 2
+        assert store['c'] == 'hello'
+
+    def test_source_from_list_with_attributes(self):
+        """Test list of tuples with attributes."""
+        store = TreeStore([
+            ('item1', 'value1', {'color': 'red'}),
+            ('item2', 'value2', {'color': 'blue', 'size': 10}),
+        ])
+        assert store['item1'] == 'value1'
+        assert store['item1?color'] == 'red'
+        assert store['item2?color'] == 'blue'
+        assert store['item2?size'] == 10
+
+    def test_source_from_list_with_nested_dict(self):
+        """Test list with nested dict values."""
+        store = TreeStore([
+            ('config', {'host': 'localhost', 'port': 5432}),
+        ])
+        assert store['config.host'] == 'localhost'
+        assert store['config.port'] == 5432
+
+    def test_source_from_list_with_nested_list(self):
+        """Test list with nested list of tuples."""
+        store = TreeStore([
+            ('parent', [
+                ('child1', 'a'),
+                ('child2', 'b'),
+            ]),
+        ])
+        assert store['parent.child1'] == 'a'
+        assert store['parent.child2'] == 'b'
+
+    def test_source_invalid_type_raises(self):
+        """Test that invalid source type raises TypeError."""
+        with pytest.raises(TypeError, match="must be dict, list, or TreeStore"):
+            TreeStore("invalid")
+
+    def test_source_list_invalid_tuple_raises(self):
+        """Test that invalid tuple length raises ValueError."""
+        with pytest.raises(ValueError, match="must be .* got 4 elements"):
+            TreeStore([('a', 1, {}, 'extra')])
 
 
 class TestTreeStoreBasic:
@@ -582,39 +698,43 @@ class TestTreeStoreBuilder:
         assert body['div_1?color'] == 'green'
 
     def test_valid_children_enforcement(self):
-        """Test that invalid children are rejected."""
-        class HtmlBuilder(TreeStoreBuilder):
-            @valid_children('li')
-            def ul(self, **attr):
-                return self.child('ul', **attr)
+        """Test that invalid children are rejected on validate()."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list(self):
+                return dict(tag='ul', valid_children={'li': '*'})
 
-            def li(self, value: str = None, **attr):
-                return self.child('li', value=value, **attr)
+            @property
+            def item(self):
+                return dict(tag='li')
 
-        builder = HtmlBuilder()
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
         ul = builder.ul()
-        ul.li('item')  # OK
+        ul.li(value='item')  # OK
+        ul.child('div')  # No error at insertion
 
         with pytest.raises(InvalidChildError, match="div.*not valid"):
-            ul.child('div')
+            builder.validate()
 
     def test_max_children_enforcement(self):
-        """Test max children count enforcement."""
-        class LimitedBuilder(TreeStoreBuilder):
-            @valid_children(item='0:2')
-            def container(self, **attr):
-                return self.child('container', **attr)
+        """Test max children count enforcement on validate()."""
+        class LimitedGrammar(Grammar):
+            @property
+            def container(self):
+                return dict(tag='container', valid_children={'item': '0-2'})
 
-            def item(self, value: str, **attr):
-                return self.child('item', value=value, **attr)
+            @property
+            def item(self):
+                return dict(tag='item')
 
-        builder = LimitedBuilder()
+        builder = TreeStoreBuilder(grammar=LimitedGrammar)
         cont = builder.container()
-        cont.item('first')
-        cont.item('second')
+        cont.item(value='first')
+        cont.item(value='second')
+        cont.item(value='third')  # No error at insertion
 
-        with pytest.raises(TooManyChildrenError, match="Maximum 2"):
-            cont.item('third')
+        with pytest.raises(TooManyChildrenError, match="at most 2"):
+            builder.validate()
 
     def test_child_inherits_builder_class(self):
         """Test child stores are same builder class."""
@@ -864,3 +984,505 @@ class TestPositionParameter:
         store.setItem('container.inserted', 99, _position='<b')
         container = store.getNode('container').value
         assert container.keys() == ['a', 'inserted', 'b', 'c']
+
+
+# ==================== Grammar System Tests ====================
+
+from genro_treestore import Grammar, element, InvalidParentError
+from genro_treestore.treestore import _parse_cardinality_symbol
+
+
+class TestParseCardinalitySymbol:
+    """Tests for _parse_cardinality_symbol."""
+
+    def test_star_zero_or_more(self):
+        """Test '*' parses to (0, None)."""
+        assert _parse_cardinality_symbol('*') == (0, None)
+
+    def test_plus_one_or_more(self):
+        """Test '+' parses to (1, None)."""
+        assert _parse_cardinality_symbol('+') == (1, None)
+
+    def test_question_zero_or_one(self):
+        """Test '?' parses to (0, 1)."""
+        assert _parse_cardinality_symbol('?') == (0, 1)
+
+    def test_single_number(self):
+        """Test single number parses to exact count."""
+        assert _parse_cardinality_symbol('1') == (1, 1)
+        assert _parse_cardinality_symbol('3') == (3, 3)
+
+    def test_range_with_dash(self):
+        """Test range with dash notation."""
+        assert _parse_cardinality_symbol('1-3') == (1, 3)
+        assert _parse_cardinality_symbol('0-5') == (0, 5)
+
+    def test_range_with_colon(self):
+        """Test range with colon notation."""
+        assert _parse_cardinality_symbol('1:3') == (1, 3)
+        assert _parse_cardinality_symbol('0:') == (0, None)
+        assert _parse_cardinality_symbol('1:') == (1, None)
+
+
+class TestGrammarBasic:
+    """Tests for Grammar class."""
+
+    def test_grammar_from_property(self):
+        """Test grammar defined via property."""
+        class SimpleGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div,span')
+
+        grammar = SimpleGrammar()
+        assert 'div' in grammar.get_all_tags()
+        assert 'span' in grammar.get_all_tags()
+
+    def test_grammar_from_element_decorator(self):
+        """Test grammar defined via @element decorator."""
+        class SimpleGrammar(Grammar):
+            @element(tag='ul,ol', valid_children={'li': '+'})
+            def ul(self, node, **attr):
+                return node
+
+        grammar = SimpleGrammar()
+        assert 'ul' in grammar.get_all_tags()
+        assert 'ol' in grammar.get_all_tags()
+
+        config = grammar.get_config('ul')
+        assert config is not None
+        assert config['valid_children'] == {'li': (1, None)}
+
+    def test_grammar_method_name_as_default_tag(self):
+        """Test @element uses method name as default tag."""
+        class SimpleGrammar(Grammar):
+            @element(valid_children={'span': '*'})
+            def div(self, node, **attr):
+                return node
+
+        grammar = SimpleGrammar()
+        assert 'div' in grammar.get_all_tags()
+
+    def test_grammar_valid_children_string(self):
+        """Test valid_children as comma-separated string."""
+        class SimpleGrammar(Grammar):
+            @property
+            def container(self):
+                return dict(tag='div', valid_children='span,p,a')
+
+        grammar = SimpleGrammar()
+        config = grammar.get_config('div')
+        assert config['valid_children'] == {
+            'span': (0, None),
+            'p': (0, None),
+            'a': (0, None),
+        }
+
+    def test_grammar_get_method(self):
+        """Test getting custom method from grammar."""
+        class SimpleGrammar(Grammar):
+            @element(tag='ul')
+            def ul(self, node, items=None, **attr):
+                if items:
+                    for item in items:
+                        node.child('li', value=item)
+                return node
+
+        grammar = SimpleGrammar()
+        method = grammar.get_method('ul')
+        assert method is not None
+        assert callable(method)
+
+
+class TestBuilderWithGrammar:
+    """Tests for TreeStoreBuilder with grammar parameter."""
+
+    def test_builder_with_grammar_class(self):
+        """Test passing Grammar class to TreeStoreBuilder."""
+        class HtmlGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div,section')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        assert builder.grammar is not None
+
+    def test_builder_with_grammar_instance(self):
+        """Test passing Grammar instance to TreeStoreBuilder."""
+        class HtmlGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div')
+
+        grammar = HtmlGrammar()
+        builder = TreeStoreBuilder(grammar=grammar)
+        assert builder.grammar is grammar
+
+    def test_dynamic_tag_method(self):
+        """Test dynamic tag access via __getattr__."""
+        class HtmlGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div,span')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        div = builder.div(id='main')
+        assert builder['div_0?id'] == 'main'
+        assert builder.getNode('div_0').tag == 'div'
+
+    def test_dynamic_tag_method_with_value(self):
+        """Test dynamic tag method creating leaf node."""
+        class HtmlGrammar(Grammar):
+            @property
+            def inline(self):
+                return dict(tag='span')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        builder.span(value='Hello')
+        assert builder['span_0'] == 'Hello'
+
+    def test_grammar_propagates_to_children(self):
+        """Test grammar is passed to child builders."""
+        class HtmlGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div,span')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        div = builder.div()
+        assert div.grammar is builder.grammar
+
+        # Child can also use dynamic tags
+        span = div.span()
+        assert builder['div_0.span_0'] is span
+
+    def test_real_methods_take_precedence(self):
+        """Test that real TreeStore methods take precedence over grammar tags."""
+        class BadGrammar(Grammar):
+            @property
+            def collisions(self):
+                return dict(tag='keys,values,items')
+
+        builder = TreeStoreBuilder(grammar=BadGrammar)
+        # keys() should return list, not create a tag
+        assert builder.keys() == []
+
+        # Access via child() still works
+        builder.child('keys', value='test')
+        assert builder['keys_0'] == 'test'
+
+    def test_attribute_error_for_unknown_tag(self):
+        """Test AttributeError for undefined tags."""
+        class HtmlGrammar(Grammar):
+            @property
+            def block(self):
+                return dict(tag='div')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        with pytest.raises(AttributeError):
+            builder.unknown_tag()
+
+
+class TestGrammarValidation:
+    """Tests for grammar-based validation via validate() method."""
+
+    def test_valid_children_from_grammar(self):
+        """Test valid_children validation using grammar."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list(self):
+                return dict(tag='ul', valid_children={'li': '*'})
+
+            @property
+            def list_item(self):
+                return dict(tag='li')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        ul = builder.ul()
+        ul.li(value='Item 1')
+        ul.li(value='Item 2')
+
+        # Validation passes
+        builder.validate()
+
+        assert builder['ul_0.li_0'] == 'Item 1'
+        assert builder['ul_0.li_1'] == 'Item 2'
+
+    def test_valid_children_rejects_invalid_tag(self):
+        """Test valid_children rejects invalid child tags on validate()."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list(self):
+                return dict(tag='ul', valid_children={'li': '*'})
+
+            @property
+            def block(self):
+                return dict(tag='div')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        ul = builder.ul()
+        ul.div()  # No error at insertion time
+
+        # Error raised at validation time
+        with pytest.raises(InvalidChildError):
+            builder.validate()
+
+    def test_valid_children_cardinality_max(self):
+        """Test valid_children max cardinality on validate()."""
+        class HtmlGrammar(Grammar):
+            @property
+            def document(self):
+                return dict(tag='html', valid_children={'head': '?', 'body': '1'})
+
+            @property
+            def parts(self):
+                return dict(tag='head,body')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        html = builder.html()
+        html.head()
+        html.head()  # No error at insertion time
+
+        # Error raised at validation time (too many head elements)
+        with pytest.raises(TooManyChildrenError):
+            builder.validate()
+
+    def test_valid_children_cardinality_min(self):
+        """Test valid_children min cardinality on validate()."""
+        class HtmlGrammar(Grammar):
+            @property
+            def document(self):
+                return dict(tag='html', valid_children={'body': '+'})
+
+            @property
+            def parts(self):
+                return dict(tag='body')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        builder.html()  # html with no body
+
+        # Error raised at validation time (missing body)
+        with pytest.raises(MissingChildError):
+            builder.validate()
+
+    def test_valid_parent_constraint(self):
+        """Test valid_parent validation on validate()."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list(self):
+                return dict(tag='ul,ol')
+
+            @property
+            def list_item(self):
+                return dict(tag='li', valid_parent='ul,ol')
+
+            @property
+            def block(self):
+                return dict(tag='div')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+
+        # li under ul is valid
+        ul = builder.ul()
+        ul.li(value='OK')
+
+        # li under div - no error at insertion time
+        div = builder.div()
+        div.li(value='Error')
+
+        # Error raised at validation time
+        with pytest.raises(InvalidParentError):
+            builder.validate()
+
+    def test_validate_without_grammar_raises(self):
+        """Test validate() raises if no grammar defined."""
+        builder = TreeStoreBuilder()
+        builder.child('div')
+
+        with pytest.raises(ValueError, match="no grammar defined"):
+            builder.validate()
+
+    def test_validate_passes_for_valid_tree(self):
+        """Test validate() passes silently for valid tree."""
+        class HtmlGrammar(Grammar):
+            @property
+            def document(self):
+                return dict(tag='html', valid_children={'head': '?', 'body': '1'})
+
+            @property
+            def head(self):
+                return dict(tag='head', valid_children={'title': '1'})
+
+            @property
+            def body(self):
+                return dict(tag='body', valid_children={'div': '*'})
+
+            @property
+            def parts(self):
+                return dict(tag='title,div')
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        html = builder.html()
+        head = html.head()
+        head.title(value='Page')
+        body = html.body()
+        body.div()
+        body.div()
+
+        # Should not raise
+        builder.validate()
+
+
+class TestElementDecoratorWithLogic:
+    """Tests for @element decorator with custom logic."""
+
+    def test_element_with_custom_method(self):
+        """Test @element decorator with custom initialization logic."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list_item(self):
+                return dict(tag='li')
+
+            @element(tag='ul', valid_children={'li': '+'})
+            def ul(self, node, items=None, **attr):
+                if items:
+                    for item in items:
+                        node.li(value=item)
+                return node
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        builder.ul(items=['A', 'B', 'C'])
+
+        assert builder['ul_0.li_0'] == 'A'
+        assert builder['ul_0.li_1'] == 'B'
+        assert builder['ul_0.li_2'] == 'C'
+
+    def test_element_aliases(self):
+        """Test @element with multiple tags (aliases)."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list_item(self):
+                return dict(tag='li')
+
+            @element(tag='ul,ol', valid_children={'li': '+'})
+            def ul(self, node, items=None, **attr):
+                if items:
+                    for item in items:
+                        node.li(value=item)
+                return node
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+
+        # Both ul and ol share the same behavior
+        builder.ul(items=['A', 'B'])
+        builder.ol(items=['1', '2'])
+
+        assert builder['ul_0.li_0'] == 'A'
+        assert builder['ol_0.li_0'] == '1'
+
+
+class TestGrammarWithGroups:
+    """Tests for grammar groups referencing other groups."""
+
+    def test_group_reference_in_valid_children(self):
+        """Test referencing a group in valid_children using string name."""
+        class HtmlGrammar(Grammar):
+            @property
+            def inline(self):
+                return dict(tag='span,a,em,strong')
+
+            @property
+            def block(self):
+                return dict(
+                    tag='div,p',
+                    valid_children={'inline': '*'},  # group name as string
+                )
+
+        grammar = HtmlGrammar()
+
+        # Group name is stored as-is
+        config = grammar.get_config('div')
+        assert 'inline' in config['valid_children']
+
+        # Expansion happens at validate() time
+        expanded = grammar.expand_name('inline')
+        assert 'span' in expanded
+        assert 'a' in expanded
+        assert 'em' in expanded
+        assert 'strong' in expanded
+
+    def test_group_reference_in_valid_parent(self):
+        """Test referencing a group in valid_parent using string."""
+        class HtmlGrammar(Grammar):
+            @property
+            def list(self):
+                return dict(tag='ul,ol')
+
+            @property
+            def list_item(self):
+                return dict(
+                    tag='li',
+                    valid_parent='ul,ol',  # direct tag list
+                )
+
+        grammar = HtmlGrammar()
+
+        config = grammar.get_config('li')
+        assert 'ul' in config['valid_parent']
+        assert 'ol' in config['valid_parent']
+
+    def test_validation_with_group_expansion(self):
+        """Test that validation correctly expands group names."""
+        class HtmlGrammar(Grammar):
+            @property
+            def inline(self):
+                return dict(tag='span,a,em')
+
+            @property
+            def block(self):
+                return dict(
+                    tag='div',
+                    valid_children={'inline': '*'},  # group name
+                )
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        div = builder.div()
+        div.span(value='text')
+        div.a(value='link')
+        div.em(value='emphasis')
+
+        # Should pass - all inline elements are valid
+        builder.validate()
+
+        # Add invalid child
+        div.child('p')
+
+        # Should fail - p is not in 'inline' group
+        with pytest.raises(InvalidChildError):
+            builder.validate()
+
+    def test_combined_groups_in_valid_children(self):
+        """Test combining multiple groups with comma: 'inline,block'."""
+        class HtmlGrammar(Grammar):
+            @property
+            def inline(self):
+                return dict(tag='span,em')
+
+            @property
+            def block(self):
+                return dict(tag='div,p')
+
+            @property
+            def container(self):
+                return dict(
+                    tag='section',
+                    valid_children={'inline,block': '*'},  # combined groups
+                )
+
+        builder = TreeStoreBuilder(grammar=HtmlGrammar)
+        section = builder.section()
+        section.span(value='inline')
+        section.div()  # block element
+
+        # All should be valid
+        builder.validate()

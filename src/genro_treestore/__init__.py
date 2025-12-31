@@ -18,6 +18,9 @@ from .treestore import (
     InvalidChildError,
     MissingChildError,
     TooManyChildrenError,
+    InvalidParentError,
+    Grammar,
+    element,
 )
 
 __all__ = [
@@ -29,4 +32,7 @@ __all__ = [
     "InvalidChildError",
     "MissingChildError",
     "TooManyChildrenError",
+    "InvalidParentError",
+    "Grammar",
+    "element",
 ]
