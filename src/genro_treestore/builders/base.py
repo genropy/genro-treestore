@@ -20,7 +20,7 @@ class BuilderBase(ABC):
     in a TreeStore. Use the @element decorator to define tags:
 
     1. Single tag (method name used):
-        @element(check='item')
+        @element(children='item')
         def menu(self, target, tag, **attr):
             return self.child(target, tag, **attr)
 
@@ -173,7 +173,7 @@ class BuilderBase(ABC):
     ) -> list[str]:
         """Check the TreeStore structure against this builder's rules.
 
-        Checks structure rules defined via @element(check=...) decorator:
+        Checks structure rules defined via @element(children=...) decorator:
         - valid_children: which tags can be children of this tag
         - cardinality: per-tag min/max constraints using slice syntax
 

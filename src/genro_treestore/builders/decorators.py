@@ -161,8 +161,8 @@ def _parse_tags_with_models(
 
 def element(
     tags: str | tuple[str, ...] | tuple[tuple[str, type], ...] = '',
-    check: str | tuple[str, ...] = '',
-    validate: bool | type = False
+    children: str | tuple[str, ...] = '',
+    model: bool | type = False
 ) -> Callable:
     """Decorator to define element tags and validation rules for a builder method.
 
@@ -177,7 +177,7 @@ def element(
               (('fridge', FridgeModel), ('oven', OvenModel))
             If empty, the method name is used as the single tag.
 
-        check: Valid child tag specs for structure validation. Can be:
+        children: Valid child tag specs for structure validation. Can be:
             - A comma-separated string: 'tag1, tag2[:1], tag3[1:]'
             - A tuple of strings: ('tag1', 'tag2[:1]', 'tag3[1:]')
 
@@ -189,7 +189,7 @@ def element(
             - 'tag[n:m]' - between n and m (inclusive)
             Empty string or empty tuple means no children allowed (leaf node).
 
-        validate: Pydantic attribute validation (requires pydantic installed):
+        model: Pydantic model for attribute validation (requires pydantic installed):
             - False: no validation (default)
             - True: auto-create model from function signature
             - BaseModel subclass: use that model for all tags
@@ -202,8 +202,8 @@ def element(
         ...     def appliance(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
         ...
-        ...     # Structure validation with check
-        ...     @element(check='section, item[1:]')
+        ...     # Structure validation with children
+        ...     @element(children='section, item[1:]')
         ...     def menu(self, target, tag, **attr):
         ...         return self.child(target, tag, **attr)
         ...
@@ -212,12 +212,12 @@ def element(
         ...         return self.child(target, tag, value='', **attr)
         ...
         ...     # Attribute validation from signature
-        ...     @element(validate=True)
+        ...     @element(model=True)
         ...     def floor(self, target, tag, number: int = 0, **attr):
         ...         return self.child(target, tag, number=number, **attr)
         ...
         ...     # Explicit Pydantic model for attributes
-        ...     @element(validate=ApartmentModel)
+        ...     @element(model=ApartmentModel)
         ...     def apartment(self, target, tag, **attr):
         ...         return self.child(target, tag, **attr)
         ...
@@ -229,13 +229,13 @@ def element(
     # Parse tags - handle string, tuple of strings, or tuple of (tag, model) pairs
     tag_list, tag_models = _parse_tags_with_models(tags)
 
-    # Parse check specs - accept both string and tuple
+    # Parse children specs - accept both string and tuple
     parsed_children: dict[str, tuple[int, int | None]] = {}
 
-    if isinstance(check, str):
-        specs = [s.strip() for s in check.split(',') if s.strip()]
+    if isinstance(children, str):
+        specs = [s.strip() for s in children.split(',') if s.strip()]
     else:
-        specs = list(check)
+        specs = list(children)
 
     for spec in specs:
         tag, min_c, max_c = _parse_tag_spec(spec)
@@ -247,13 +247,13 @@ def element(
         signature_model: type | None = None
         explicit_model: type | None = None
 
-        if validate is True and PYDANTIC_AVAILABLE:
+        if model is True and PYDANTIC_AVAILABLE:
             # Create model from function signature
             signature_model = _create_model_from_signature(func, f'{func.__name__}_Model')
-        elif validate is not False and PYDANTIC_AVAILABLE:
-            # validate is a BaseModel subclass
-            if isinstance(validate, type) and issubclass(validate, BaseModel):
-                explicit_model = validate
+        elif model is not False and PYDANTIC_AVAILABLE:
+            # model is a BaseModel subclass
+            if isinstance(model, type) and issubclass(model, BaseModel):
+                explicit_model = model
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

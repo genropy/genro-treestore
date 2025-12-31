@@ -4,7 +4,7 @@
 """BuildingBuilder - Example builder for building/apartment structures.
 
 A didactic example showing how to use @element decorator for:
-- Structure validation with check parameter
+- Structure validation with children parameter
 - Simple elements (single node)
 - Complex elements (nested structures created by a single method call)
 """
@@ -140,21 +140,21 @@ class BuildingBuilder(BuilderBase):
 
     # === Building level ===
 
-    @element(check='floor')
+    @element(children='floor')
     def building(self, target: TreeStore, tag: str, name: str = '', **attr) -> TreeStore:
         """Create a building. Can contain only floors."""
         return self.child(target, tag, value=None, name=name, **attr)
 
     # === Floor level ===
 
-    @element(check='apartment, corridor, stairs')
+    @element(children='apartment, corridor, stairs')
     def floor(self, target: TreeStore, tag: str, number: int = 0, **attr) -> TreeStore:
         """Create a floor. Can contain apartments, corridors, stairs."""
         return self.child(target, tag, value=None, number=number, **attr)
 
     # === Floor elements ===
 
-    @element(check='kitchen[:1], bathroom[1:], bedroom, living_room[:1], dining_room[:1]')
+    @element(children='kitchen[:1], bathroom[1:], bedroom, living_room[:1], dining_room[:1]')
     def apartment(self, target: TreeStore, tag: str, number: str = '', **attr) -> TreeStore:
         """Create an apartment. Must have at least 1 bathroom, max 1 kitchen/living/dining."""
         return self.child(target, tag, value=None, number=number, **attr)
@@ -171,27 +171,27 @@ class BuildingBuilder(BuilderBase):
 
     # === Rooms ===
 
-    @element(check='fridge[:1], oven[:2], sink[:1], table, chair')
+    @element(children='fridge[:1], oven[:2], sink[:1], table, chair')
     def kitchen(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a kitchen. Max 1 fridge, max 2 ovens, max 1 sink."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(check='toilet[:1], shower[:1], sink[:1]')
+    @element(children='toilet[:1], shower[:1], sink[:1]')
     def bathroom(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a bathroom. Max 1 of each fixture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(check='bed, wardrobe, desk, chair')
+    @element(children='bed, wardrobe, desk, chair')
     def bedroom(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a bedroom. Can contain bedroom furniture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(check='sofa, tv, table, chair')
+    @element(children='sofa, tv, table, chair')
     def living_room(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a living room. Can contain living room furniture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(check='table, chair')
+    @element(children='table, chair')
     def dining_room(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a dining room. Can contain dining furniture."""
         return self.child(target, tag, value=None, **attr)
@@ -214,7 +214,7 @@ class BuildingBuilder(BuilderBase):
     # === Complex furniture (nested structures) ===
     # A single method call can create multiple nodes
 
-    @element(check='chest_of_drawers[:1], door')
+    @element(children='chest_of_drawers[:1], door')
     def wardrobe(
         self, target: TreeStore, tag: str,
         drawers: int = 4, doors: int = 2, **attr
@@ -263,7 +263,7 @@ class BuildingBuilder(BuilderBase):
 
         return wardrobe
 
-    @element(check='drawer')
+    @element(children='drawer')
     def chest_of_drawers(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a chest of drawers container."""
         return self.child(target, tag, value=None, **attr)
