@@ -8,9 +8,9 @@ This guide will help you get started with genro-treestore in a few minutes.
 pip install genro-treestore
 ```
 
-## TreeStore (Bag-like API)
+## TreeStore API
 
-TreeStore provides a familiar API inspired by Genro Bag.
+TreeStore provides a hierarchical data structure with path-based access.
 
 ### Creating a TreeStore
 
@@ -19,10 +19,10 @@ from genro_treestore import TreeStore
 
 store = TreeStore()
 
-# Create nodes with setItem (autocreates path)
-store.setItem('config.database.host', 'localhost')
-store.setItem('config.database.port', 5432)
-store.setItem('config.cache.enabled', True)
+# Create nodes with set_item (autocreates path)
+store.set_item('config.database.host', 'localhost')
+store.set_item('config.database.port', 5432)
+store.set_item('config.cache.enabled', True)
 ```
 
 ### Accessing Values
@@ -31,9 +31,9 @@ store.setItem('config.cache.enabled', True)
 # Using __getitem__
 store['config.database.host']  # 'localhost'
 
-# Using getItem (with default)
-store.getItem('config.database.host')  # 'localhost'
-store.getItem('missing', 'default')  # 'default'
+# Using get_item (with default)
+store.get_item('config.database.host')  # 'localhost'
+store.get_item('missing', 'default')  # 'default'
 ```
 
 ### Setting Values
@@ -43,34 +43,34 @@ store.getItem('missing', 'default')  # 'default'
 store['users.alice'] = 'Alice'
 store['users.bob'] = 'Bob'
 
-# Using setItem with attributes
-store.setItem('items.product', 'Widget', price=9.99, stock=100)
+# Using set_item with attributes
+store.set_item('items.product', 'Widget', price=9.99, stock=100)
 ```
 
 ### Fluent Chaining
 
-`setItem` returns TreeStore for fluent chaining:
+`set_item` returns TreeStore for fluent chaining:
 
 ```python
 # Chain branches (returns child store)
-store.setItem('html').setItem('body').setItem('div', id='main')
+store.set_item('html').set_item('body').set_item('div', id='main')
 
 # Chain leaves on same level (returns parent)
-ul = store.setItem('html.body.ul')
-ul.setItem('li1', 'Item 1').setItem('li2', 'Item 2').setItem('li3', 'Item 3')
+ul = store.set_item('html.body.ul')
+ul.set_item('li1', 'Item 1').set_item('li2', 'Item 2').set_item('li3', 'Item 3')
 ```
 
 ### Attributes
 
 ```python
 # Set attributes
-store.setItem('div', color='red', size=10)
-store.setAttr('div', border='1px')
+store.set_item('div', color='red', size=10)
+store.set_attr('div', border='1px')
 
 # Get attributes
 store['div?color']  # 'red'
-store.getAttr('div', 'size')  # 10
-store.getAttr('div')  # {'color': 'red', 'size': 10, 'border': '1px'}
+store.get_attr('div', 'size')  # 10
+store.get_attr('div')  # {'color': 'red', 'size': 10, 'border': '1px'}
 ```
 
 ### Path Syntax
@@ -90,10 +90,10 @@ store['path?attr'] = v   # set attribute
 Extract data from nodes:
 
 ```python
-store.setItem('users.alice', 'Alice', role='admin')
-store.setItem('users.bob', 'Bob', role='user')
+store.set_item('users.alice', 'Alice', role='admin')
+store.set_item('users.bob', 'Bob', role='user')
 
-users = store.getNode('users').value
+users = store.get_node('users').value
 users.digest('#k')  # ['alice', 'bob']
 users.digest('#v')  # ['Alice', 'Bob']
 users.digest('#a.role')  # ['admin', 'user']

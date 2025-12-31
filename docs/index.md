@@ -1,6 +1,6 @@
 # Genro-TreeStore
 
-A lightweight, zero-dependency hierarchical data structure inspired by Genro Bag.
+A lightweight, zero-dependency hierarchical data structure for the Genro ecosystem.
 
 ```{toctree}
 :maxdepth: 2
@@ -17,10 +17,10 @@ api/index
 
 **genro-treestore** provides two complementary APIs:
 
-1. **TreeStore**: Bag-like API with `setItem`/`getItem`, path autocreate, fluent chaining
+1. **TreeStore**: Hierarchical data with `set_item`/`get_item`, path autocreate, fluent chaining
 2. **TreeStoreBuilder**: Builder pattern with auto-labeling and validation
 
-### TreeStore (Bag-like API)
+### TreeStore API
 
 ```python
 from genro_treestore import TreeStore
@@ -28,17 +28,17 @@ from genro_treestore import TreeStore
 store = TreeStore()
 
 # Create nested structure with autocreate
-store.setItem('config.database.host', 'localhost')
-store.setItem('config.database.port', 5432)
+store.set_item('config.database.host', 'localhost')
+store.set_item('config.database.port', 5432)
 
 # Access values
 store['config.database.host']  # 'localhost'
 
 # Fluent chaining
-store.setItem('html').setItem('body').setItem('div', id='main')
+store.set_item('html').set_item('body').set_item('div', id='main')
 
 # Attributes
-store.setAttr('html.body.div', color='red')
+store.set_attr('html.body.div', color='red')
 store['html.body.div?color']  # 'red'
 
 # Digest
@@ -73,9 +73,9 @@ builder['ul_0.li_0']  # 'Item 1'
 
 - **Zero dependencies**: Pure Python, no external packages
 - **O(1) lookup**: Dict-based internal storage
-- **Path autocreate**: `store.setItem('a.b.c', value)` creates all intermediate nodes
-- **Fluent chaining**: Chain `setItem` calls for readable code
-- **Digest**: Extract data with `#k`, `#v`, `#a` syntax (like Bag)
+- **Path autocreate**: `store.set_item('a.b.c', value)` creates all intermediate nodes
+- **Fluent chaining**: Chain `set_item` calls for readable code
+- **Digest**: Extract data with `#k`, `#v`, `#a` syntax
 - **Builder validation**: `@valid_children` with cardinality constraints
 
 ## Installation

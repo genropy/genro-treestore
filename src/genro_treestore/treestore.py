@@ -1,11 +1,11 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""TreeStore - A lightweight hierarchical data structure inspired by Genro Bag.
+"""TreeStore - A lightweight hierarchical data structure.
 
 This module provides:
 - TreeStoreNode: A node with label, attributes, and value
-- TreeStore: A Bag-like container with setItem/getItem API
+- TreeStore: A container with set_item/get_item API
 - TreeStoreBuilder: Builder pattern with auto-labeling and validation
 - valid_children: Decorator for child validation in typed builders
 """
@@ -86,13 +86,13 @@ class TreeStoreNode:
         """Return parent TreeStore for navigation/chaining.
 
         Example:
-            >>> node._.setItem('sibling', 'value')  # add sibling
+            >>> node._.set_item('sibling', 'value')  # add sibling
         """
         if self.parent is None:
             raise ValueError("Node has no parent")
         return self.parent
 
-    def getAttr(self, attr: str | None = None, default: Any = None) -> Any:
+    def get_attr(self, attr: str | None = None, default: Any = None) -> Any:
         """Get attribute value or all attributes.
 
         Args:
@@ -106,7 +106,7 @@ class TreeStoreNode:
             return self.attr
         return self.attr.get(attr, default)
 
-    def setAttr(self, _attr: dict[str, Any] | None = None, **kwargs: Any) -> None:
+    def set_attr(self, _attr: dict[str, Any] | None = None, **kwargs: Any) -> None:
         """Set attributes on the node.
 
         Args:
@@ -144,19 +144,19 @@ class BuilderNode(TreeStoreNode):
 
 
 class TreeStore:
-    """A Bag-like hierarchical data container with O(1) lookup.
+    """A hierarchical data container with O(1) lookup.
 
-    TreeStore provides a familiar API similar to Genro Bag:
-    - setItem(path, value, **attr): Create/update nodes with autocreate
-    - getItem(path) / store[path]: Get values
-    - getAttr(path, attr) / setAttr(path, **attr): Attribute access
+    TreeStore provides:
+    - set_item(path, value, **attr): Create/update nodes with autocreate
+    - get_item(path) / store[path]: Get values
+    - get_attr(path, attr) / set_attr(path, **attr): Attribute access
     - digest(what): Extract data with #k, #v, #a syntax
 
     The internal storage uses dict for O(1) lookup performance.
 
     Example:
         >>> store = TreeStore()
-        >>> store.setItem('html.body.div', color='red')
+        >>> store.set_item('html.body.div', color='red')
         >>> store['html.body.div?color']
         'red'
     """
@@ -326,7 +326,7 @@ class TreeStore:
         if '.' not in label:
             return label in self._nodes
         try:
-            self.getNode(label)
+            self.get_node(label)
             return True
         except KeyError:
             return False
@@ -365,7 +365,7 @@ class TreeStore:
 
         Args:
             node: The node to insert.
-            position: Position specifier (Bag-style):
+            position: Position specifier:
                 - None or '>': append to end (default)
                 - '<': insert at beginning
                 - '<label': insert before label
@@ -474,9 +474,9 @@ class TreeStore:
 
         return current, parts[-1]
 
-    # ==================== Core API (Bag-like) ====================
+    # ==================== Core API ====================
 
-    def setItem(
+    def set_item(
         self,
         path: str,
         value: Any = None,
@@ -490,7 +490,7 @@ class TreeStore:
             path: Dotted path to the item (e.g., 'html.body.div').
             value: The value to store. If None, creates a branch node.
             _attributes: Dictionary of attributes.
-            _position: Position specifier (Bag-style):
+            _position: Position specifier:
                 - None or '>': append to end (default)
                 - '<': insert at beginning
                 - '<label': insert before label
@@ -506,9 +506,9 @@ class TreeStore:
             - If leaf created: returns the parent TreeStore
 
         Example:
-            >>> store.setItem('html').setItem('body').setItem('div', color='red')
-            >>> store.setItem('ul').setItem('li', 'Item 1').setItem('li', 'Item 2')
-            >>> store.setItem('first', 'value', _position='<')  # insert at beginning
+            >>> store.set_item('html').set_item('body').set_item('div', color='red')
+            >>> store.set_item('ul').set_item('li', 'Item 1').set_item('li', 'Item 2')
+            >>> store.set_item('first', 'value', _position='<')  # insert at beginning
         """
         parent_store, label = self._htraverse(path, autocreate=True)
 
@@ -544,7 +544,7 @@ class TreeStore:
             parent_store._insert_node(node, _position)
             return child_store  # Return child store for chaining children
 
-    def getItem(self, path: str, default: Any = None) -> Any:
+    def get_item(self, path: str, default: Any = None) -> Any:
         """Get the value at the given path.
 
         Args:
@@ -555,8 +555,8 @@ class TreeStore:
             The value at the path, attribute value, or default.
 
         Example:
-            >>> store.getItem('html.body.div')  # returns value
-            >>> store.getItem('html.body.div?color')  # returns attribute
+            >>> store.get_item('html.body.div')  # returns value
+            >>> store.get_item('html.body.div?color')  # returns attribute
         """
         try:
             # Check for attribute access
@@ -564,7 +564,7 @@ class TreeStore:
             if '?' in path:
                 path, attr_name = path.rsplit('?', 1)
 
-            node = self.getNode(path)
+            node = self.get_node(path)
 
             if attr_name is not None:
                 return node.attr.get(attr_name, default)
@@ -592,7 +592,7 @@ class TreeStore:
         if '?' in path:
             path, attr_name = path.rsplit('?', 1)
 
-        node = self.getNode(path)
+        node = self.get_node(path)
 
         if attr_name is not None:
             return node.attr.get(attr_name)
@@ -613,13 +613,13 @@ class TreeStore:
         if '?' in path:
             # Set attribute
             node_path, attr_name = path.rsplit('?', 1)
-            node = self.getNode(node_path)
+            node = self.get_node(node_path)
             node.attr[attr_name] = value
         else:
             # Set value (with autocreate)
-            self.setItem(path, value)
+            self.set_item(path, value)
 
-    def getNode(self, path: str) -> TreeStoreNode:
+    def get_node(self, path: str) -> TreeStoreNode:
         """Get node at the given path.
 
         Args:
@@ -646,7 +646,7 @@ class TreeStore:
             return parent_store._get_node_by_position(key)
         return parent_store._nodes[label]
 
-    def getAttr(self, path: str, attr: str | None = None, default: Any = None) -> Any:
+    def get_attr(self, path: str, attr: str | None = None, default: Any = None) -> Any:
         """Get attribute(s) from node at path.
 
         Args:
@@ -658,12 +658,12 @@ class TreeStore:
             Attribute value, all attributes dict, or default.
         """
         try:
-            node = self.getNode(path)
-            return node.getAttr(attr, default)
+            node = self.get_node(path)
+            return node.get_attr(attr, default)
         except KeyError:
             return default
 
-    def setAttr(
+    def set_attr(
         self, path: str, _attributes: dict[str, Any] | None = None, **kwargs: Any
     ) -> None:
         """Set attributes on node at path.
@@ -673,10 +673,10 @@ class TreeStore:
             _attributes: Dictionary of attributes.
             **kwargs: Additional attributes as keyword arguments.
         """
-        node = self.getNode(path)
-        node.setAttr(_attributes, **kwargs)
+        node = self.get_node(path)
+        node.set_attr(_attributes, **kwargs)
 
-    def delItem(self, path: str) -> TreeStoreNode:
+    def del_item(self, path: str) -> TreeStoreNode:
         """Delete and return node at path.
 
         Args:
@@ -702,7 +702,7 @@ class TreeStore:
             The value of the removed node, or default.
         """
         try:
-            node = self.delItem(path)
+            node = self.del_item(path)
             return node.value
         except KeyError:
             return default
@@ -744,7 +744,7 @@ class TreeStore:
         """Return list of nodes at this level in insertion order."""
         return list(self.iter_nodes())
 
-    def getNodes(self, path: str = '') -> list[TreeStoreNode]:
+    def get_nodes(self, path: str = '') -> list[TreeStoreNode]:
         """Get nodes at path (or root if empty).
 
         Args:
@@ -756,7 +756,7 @@ class TreeStore:
         if not path:
             return list(self._order)
 
-        node = self.getNode(path)
+        node = self.get_node(path)
         if node.is_branch:
             return list(node.value._order)
         return []
@@ -764,7 +764,7 @@ class TreeStore:
     # ==================== Digest ====================
 
     def iter_digest(self, what: str = '#k,#v') -> Iterator[Any]:
-        """Yield data from nodes using Bag-style digest syntax.
+        """Yield data from nodes using digest syntax.
 
         Args:
             what: Comma-separated specifiers:
@@ -803,7 +803,7 @@ class TreeStore:
                 yield tuple(_extract(node, spec) for spec in specs)
 
     def digest(self, what: str = '#k,#v') -> list[Any]:
-        """Extract data from nodes using Bag-style digest syntax.
+        """Extract data from nodes using digest syntax.
 
         Args:
             what: Comma-separated specifiers:
@@ -847,7 +847,7 @@ class TreeStore:
             >>> store.walk(lambda n: print(n.label))
         """
         if callback is not None:
-            # Callback mode (like Bag)
+            # Callback mode
             for node in self._order:
                 callback(node)
                 if node.is_branch:
@@ -881,7 +881,7 @@ class TreeStore:
         return self.parent.parent.depth + 1 if self.parent.parent else 1
 
     @property
-    def parentNode(self) -> TreeStoreNode | None:
+    def parent_node(self) -> TreeStoreNode | None:
         """Get the parent node (alias for self.parent)."""
         return self.parent
 
@@ -1481,7 +1481,7 @@ class TreeStoreBuilder(TreeStore):
             label: Explicit label (optional, auto-generated if None).
             value: If provided, creates a leaf node; otherwise creates a branch.
             attributes: Dict of attributes (merged with **attr).
-            _position: Position specifier (Bag-style):
+            _position: Position specifier:
                 - None or '>': append to end (default)
                 - '<': insert at beginning
                 - '<label': insert before label

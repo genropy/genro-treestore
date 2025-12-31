@@ -7,7 +7,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A lightweight, zero-dependency hierarchical data structure inspired by Genro Bag, for the Genro ecosystem (Genro Kyō).
+A lightweight, zero-dependency hierarchical data structure for the Genro ecosystem (Genro Kyo).
 
 ## Installation
 
@@ -17,16 +17,16 @@ pip install genro-treestore
 
 ## Features
 
-- **TreeStore**: Bag-like API with `setItem`/`getItem`, path autocreate, fluent chaining
+- **TreeStore**: Hierarchical data with `set_item`/`get_item`, path autocreate, fluent chaining
 - **TreeStoreNode**: Nodes with label, attributes, and value
 - **TreeStoreBuilder**: Builder pattern with auto-labeling and `@valid_children` validation
 - **Path syntax**: Dotted paths, positional (`#N`), and attribute (`?attr`) access
-- **Digest**: Extract data with `#k`, `#v`, `#a` syntax (like Bag)
+- **Digest**: Extract data with `#k`, `#v`, `#a` syntax
 - **Zero dependencies**: Pure Python, no external packages required
 
 ## Quick Start
 
-### Bag-like API (TreeStore)
+### TreeStore API
 
 ```python
 from genro_treestore import TreeStore
@@ -34,25 +34,25 @@ from genro_treestore import TreeStore
 store = TreeStore()
 
 # Create nested structure with autocreate
-store.setItem('config.database.host', 'localhost')
-store.setItem('config.database.port', 5432)
+store.set_item('config.database.host', 'localhost')
+store.set_item('config.database.port', 5432)
 
 # Access values
 store['config.database.host']  # 'localhost'
-store.getItem('config.database.port')  # 5432
+store.get_item('config.database.port')  # 5432
 
 # Fluent chaining
-store.setItem('html').setItem('body').setItem('div', id='main')
+store.set_item('html').set_item('body').set_item('div', id='main')
 store['html.body.div?id']  # 'main'
 
 # Attributes
-store.setAttr('html.body.div', color='red', size=10)
-store.getAttr('html.body.div', 'color')  # 'red'
+store.set_attr('html.body.div', color='red', size=10)
+store.get_attr('html.body.div', 'color')  # 'red'
 
-# Digest (like Bag)
-store.setItem('users.alice', 'Alice', role='admin')
-store.setItem('users.bob', 'Bob', role='user')
-users = store.getNode('users').value
+# Digest
+store.set_item('users.alice', 'Alice', role='admin')
+store.set_item('users.bob', 'Bob', role='user')
+users = store.get_node('users').value
 users.digest('#k')  # ['alice', 'bob']
 users.digest('#v')  # ['Alice', 'Bob']
 users.digest('#a.role')  # ['admin', 'user']
@@ -113,9 +113,9 @@ def section(self, **attr):
 
 ## API Comparison: TreeStore vs TreeStoreBuilder
 
-| TreeStore (Bag-like) | TreeStoreBuilder |
-|---------------------|------------------|
-| `setItem(path, value, **attr)` | `child(tag, value=..., **attr)` |
+| TreeStore | TreeStoreBuilder |
+| --------- | ---------------- |
+| `set_item(path, value, **attr)` | `child(tag, value=..., **attr)` |
 | Explicit labels in path | Auto-generated labels (`tag_N`) |
 | Fluent chaining (returns TreeStore) | Returns TreeStore/Node |
 | No validation | `@valid_children` validation |

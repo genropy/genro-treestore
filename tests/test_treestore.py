@@ -76,21 +76,21 @@ class TestTreeStoreNode:
         with pytest.raises(ValueError, match="no parent"):
             _ = node._
 
-    def test_getAttr(self):
-        """Test getAttr method."""
+    def test_get_attr(self):
+        """Test get_attr method."""
         node = TreeStoreNode('item', {'color': 'red', 'size': 10})
-        assert node.getAttr('color') == 'red'
-        assert node.getAttr('size') == 10
-        assert node.getAttr('missing') is None
-        assert node.getAttr('missing', 'default') == 'default'
-        assert node.getAttr() == {'color': 'red', 'size': 10}
+        assert node.get_attr('color') == 'red'
+        assert node.get_attr('size') == 10
+        assert node.get_attr('missing') is None
+        assert node.get_attr('missing', 'default') == 'default'
+        assert node.get_attr() == {'color': 'red', 'size': 10}
 
-    def test_setAttr(self):
-        """Test setAttr method."""
+    def test_set_attr(self):
+        """Test set_attr method."""
         node = TreeStoreNode('item')
-        node.setAttr({'color': 'red'}, size=10)
+        node.set_attr({'color': 'red'}, size=10)
         assert node.attr == {'color': 'red', 'size': 10}
-        node.setAttr(color='blue')
+        node.set_attr(color='blue')
         assert node.attr['color'] == 'blue'
 
 
@@ -144,8 +144,8 @@ class TestTreeStoreSource:
     def test_source_from_treestore(self):
         """Test copying from another TreeStore."""
         original = TreeStore()
-        original.setItem('a', 1, color='red')
-        original.setItem('b.c', 2)
+        original.set_item('a', 1, color='red')
+        original.set_item('b.c', 2)
 
         copy = TreeStore(original)
 
@@ -218,72 +218,72 @@ class TestTreeStoreBasic:
         assert len(store) == 0
         assert store.parent is None
 
-    def test_setItem_creates_branch(self):
-        """Test setItem creates a branch node when no value."""
+    def test_set_item_creates_branch(self):
+        """Test set_item creates a branch node when no value."""
         store = TreeStore()
-        result = store.setItem('div', color='red')
+        result = store.set_item('div', color='red')
         assert isinstance(result, TreeStore)
         assert 'div' in store
-        assert store.getAttr('div', 'color') == 'red'
+        assert store.get_attr('div', 'color') == 'red'
 
-    def test_setItem_creates_leaf_with_value(self):
-        """Test setItem creates leaf when value is provided."""
+    def test_set_item_creates_leaf_with_value(self):
+        """Test set_item creates leaf when value is provided."""
         store = TreeStore()
-        result = store.setItem('name', 'Alice')
+        result = store.set_item('name', 'Alice')
         assert isinstance(result, TreeStore)  # Returns parent for chaining
         assert result is store
         assert store['name'] == 'Alice'
 
-    def test_setItem_autocreate_path(self):
-        """Test setItem creates intermediate nodes."""
+    def test_set_item_autocreate_path(self):
+        """Test set_item creates intermediate nodes."""
         store = TreeStore()
-        store.setItem('html.body.div', color='red')
+        store.set_item('html.body.div', color='red')
         assert 'html' in store
         assert store['html.body.div?color'] == 'red'
 
-    def test_setItem_fluent_chaining_branches(self):
+    def test_set_item_fluent_chaining_branches(self):
         """Test fluent chaining with branches."""
         store = TreeStore()
-        store.setItem('html').setItem('body').setItem('div', color='red')
+        store.set_item('html').set_item('body').set_item('div', color='red')
         assert store['html.body.div?color'] == 'red'
 
-    def test_setItem_fluent_chaining_leaves(self):
+    def test_set_item_fluent_chaining_leaves(self):
         """Test fluent chaining with leaves returns parent."""
         store = TreeStore()
-        ul = store.setItem('ul')
-        ul.setItem('li', 'Item 1').setItem('li2', 'Item 2').setItem('li3', 'Item 3')
+        ul = store.set_item('ul')
+        ul.set_item('li', 'Item 1').set_item('li2', 'Item 2').set_item('li3', 'Item 3')
         assert store['ul.li'] == 'Item 1'
         assert store['ul.li2'] == 'Item 2'
         assert store['ul.li3'] == 'Item 3'
 
-    def test_getItem_returns_value(self):
-        """Test getItem returns value."""
+    def test_get_item_returns_value(self):
+        """Test get_item returns value."""
         store = TreeStore()
-        store.setItem('name', 'Alice')
-        assert store.getItem('name') == 'Alice'
+        store.set_item('name', 'Alice')
+        assert store.get_item('name') == 'Alice'
 
-    def test_getItem_with_default(self):
-        """Test getItem returns default for missing path."""
+    def test_get_item_with_default(self):
+        """Test get_item returns default for missing path."""
         store = TreeStore()
-        assert store.getItem('missing') is None
-        assert store.getItem('missing', 'default') == 'default'
+        assert store.get_item('missing') is None
+        assert store.get_item('missing', 'default') == 'default'
 
-    def test_getItem_attribute_access(self):
-        """Test getItem with ?attr syntax."""
+    def test_get_item_attribute_access(self):
+        """Test get_item with ?attr syntax."""
         store = TreeStore()
-        store.setItem('div', color='red')
-        assert store.getItem('div?color') == 'red'
+        store.set_item('div', color='red')
+        assert store.get_item('div?color') == 'red'
 
     def test_getitem_returns_value(self):
         """Test __getitem__ returns value."""
         store = TreeStore()
-        store.setItem('name', 'Alice')
+        store.set_item('name', 'Alice')
         assert store['name'] == 'Alice'
 
     def test_getitem_attribute_access(self):
         """Test __getitem__ with ?attr syntax."""
         store = TreeStore()
-        store.setItem('div', color='red')
+        store.set_item('div', color='red')
         assert store['div?color'] == 'red'
 
     def test_setitem_sets_value(self):
@@ -295,41 +295,41 @@ class TestTreeStoreBasic:
     def test_setitem_sets_attribute(self):
         """Test __setitem__ sets attribute with ?attr syntax."""
         store = TreeStore()
-        store.setItem('div')
+        store.set_item('div')
         store['div?color'] = 'red'
         assert store['div?color'] == 'red'
 
-    def test_getNode(self):
-        """Test getNode returns TreeStoreNode."""
+    def test_get_node(self):
+        """Test get_node returns TreeStoreNode."""
         store = TreeStore()
-        store.setItem('div', color='red')
-        node = store.getNode('div')
+        store.set_item('div', color='red')
+        node = store.get_node('div')
         assert isinstance(node, TreeStoreNode)
         assert node.label == 'div'
         assert node.attr['color'] == 'red'
 
-    def test_getAttr(self):
-        """Test getAttr on store."""
+    def test_get_attr(self):
+        """Test get_attr on store."""
         store = TreeStore()
-        store.setItem('div', color='red', size=10)
-        assert store.getAttr('div', 'color') == 'red'
-        assert store.getAttr('div', 'size') == 10
-        assert store.getAttr('div') == {'color': 'red', 'size': 10}
+        store.set_item('div', color='red', size=10)
+        assert store.get_attr('div', 'color') == 'red'
+        assert store.get_attr('div', 'size') == 10
+        assert store.get_attr('div') == {'color': 'red', 'size': 10}
 
-    def test_setAttr(self):
-        """Test setAttr on store."""
+    def test_set_attr(self):
+        """Test set_attr on store."""
         store = TreeStore()
-        store.setItem('div')
-        store.setAttr('div', color='red', size=10)
+        store.set_item('div')
+        store.set_attr('div', color='red', size=10)
         assert store['div?color'] == 'red'
         assert store['div?size'] == 10
 
-    def test_delItem(self):
-        """Test delItem removes node."""
+    def test_del_item(self):
+        """Test del_item removes node."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        node = store.delItem('a')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        node = store.del_item('a')
         assert node.label == 'a'
         assert 'a' not in store
         assert 'b' in store
@@ -337,7 +337,7 @@ class TestTreeStoreBasic:
     def test_pop(self):
         """Test pop removes and returns value."""
         store = TreeStore()
-        store.setItem('name', 'Alice')
+        store.set_item('name', 'Alice')
         value = store.pop('name')
         assert value == 'Alice'
         assert 'name' not in store
@@ -355,8 +355,8 @@ class TestTreeStoreIteration:
     def test_iter_yields_nodes(self):
         """Test __iter__ yields nodes."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         nodes = list(store)
         assert len(nodes) == 2
         assert all(isinstance(n, TreeStoreNode) for n in nodes)
@@ -364,39 +364,39 @@ class TestTreeStoreIteration:
     def test_keys(self):
         """Test keys() returns labels."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.keys() == ['a', 'b']
 
     def test_values(self):
         """Test values() returns values."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.values() == [1, 2]
 
     def test_items(self):
         """Test items() returns (label, value) pairs."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.items() == [('a', 1), ('b', 2)]
 
     def test_nodes(self):
         """Test nodes() returns list of nodes."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         nodes = store.nodes()
         assert len(nodes) == 2
         assert all(isinstance(n, TreeStoreNode) for n in nodes)
 
-    def test_getNodes(self):
-        """Test getNodes at path."""
+    def test_get_nodes(self):
+        """Test get_nodes at path."""
         store = TreeStore()
-        store.setItem('div.span', 'text')
-        store.setItem('div.p', 'para')
-        nodes = store.getNodes('div')
+        store.set_item('div.span', 'text')
+        store.set_item('div.p', 'para')
+        nodes = store.get_nodes('div')
         assert len(nodes) == 2
 
 
@@ -406,22 +406,22 @@ class TestTreeStoreDigest:
     def test_digest_keys(self):
         """Test digest #k returns labels."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.digest('#k') == ['a', 'b']
 
     def test_digest_values(self):
         """Test digest #v returns values."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.digest('#v') == [1, 2]
 
     def test_digest_attributes(self):
         """Test digest #a returns all attributes."""
         store = TreeStore()
-        store.setItem('a', 1, color='red')
-        store.setItem('b', 2, color='blue')
+        store.set_item('a', 1, color='red')
+        store.set_item('b', 2, color='blue')
         attrs = store.digest('#a')
         assert attrs[0]['color'] == 'red'
         assert attrs[1]['color'] == 'blue'
@@ -429,15 +429,15 @@ class TestTreeStoreDigest:
     def test_digest_specific_attribute(self):
         """Test digest #a.attrname returns specific attribute."""
         store = TreeStore()
-        store.setItem('a', 1, color='red')
-        store.setItem('b', 2, color='blue')
+        store.set_item('a', 1, color='red')
+        store.set_item('b', 2, color='blue')
         assert store.digest('#a.color') == ['red', 'blue']
 
     def test_digest_multiple(self):
         """Test digest with multiple specifiers."""
         store = TreeStore()
-        store.setItem('a', 1, color='red')
-        store.setItem('b', 2, color='blue')
+        store.set_item('a', 1, color='red')
+        store.set_item('b', 2, color='blue')
         result = store.digest('#k,#v,#a.color')
         assert result == [('a', 1, 'red'), ('b', 2, 'blue')]
 
@@ -448,8 +448,8 @@ class TestTreeStoreWalk:
     def test_walk_generator(self):
         """Test walk as generator."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         paths = [(p, n.value) for p, n in store.walk()]
         assert ('a', 1) in paths
         assert ('b', 2) in paths
@@ -457,7 +457,7 @@ class TestTreeStoreWalk:
     def test_walk_nested(self):
         """Test walk with nested structure."""
         store = TreeStore()
-        store.setItem('div.span', 'text')
+        store.set_item('div.span', 'text')
         paths = [p for p, _ in store.walk()]
         assert 'div' in paths
         assert 'div.span' in paths
@@ -465,8 +465,8 @@ class TestTreeStoreWalk:
     def test_walk_callback(self):
         """Test walk with callback."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         labels = []
         store.walk(lambda n: labels.append(n.label))
         assert labels == ['a', 'b']
@@ -478,8 +478,8 @@ class TestTreeStoreNavigation:
     def test_root_property(self):
         """Test root property."""
         store = TreeStore()
-        div = store.setItem('div')
-        span = div.setItem('span')
+        div = store.set_item('div')
+        span = div.set_item('span')
         assert store.root is store
         assert div.root is store
         assert span.root is store
@@ -488,18 +488,18 @@ class TestTreeStoreNavigation:
         """Test depth property."""
         store = TreeStore()
         assert store.depth == 0
-        div = store.setItem('div')
+        div = store.set_item('div')
         assert div.depth == 1
-        span = div.setItem('span')
+        span = div.set_item('span')
         assert span.depth == 2
 
-    def test_parentNode(self):
-        """Test parentNode property."""
+    def test_parent_node(self):
+        """Test parent_node property."""
         store = TreeStore()
-        div = store.setItem('div')
-        assert store.parentNode is None
-        assert div.parentNode is not None
-        assert div.parentNode.label == 'div'
+        div = store.set_item('div')
+        assert store.parent_node is None
+        assert div.parent_node is not None
+        assert div.parent_node.label == 'div'
 
 
 class TestTreeStorePathAccess:
@@ -508,9 +508,9 @@ class TestTreeStorePathAccess:
     def test_positional_access(self):
         """Test #N positional access."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
         assert store['#0'] == 1
         assert store['#1'] == 2
         assert store['#2'] == 3
@@ -518,28 +518,28 @@ class TestTreeStorePathAccess:
     def test_positional_negative(self):
         """Test negative positional access."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store['#-1'] == 2
         assert store['#-2'] == 1
 
     def test_positional_in_path(self):
         """Test positional access in dotted path."""
         store = TreeStore()
-        store.setItem('div.span', 'text')
+        store.set_item('div.span', 'text')
         assert store['#0.#0'] == 'text'
 
     def test_mixed_path_access(self):
         """Test mixed positional and label access."""
         store = TreeStore()
-        store.setItem('div.span', 'text')
+        store.set_item('div.span', 'text')
         assert store['div.#0'] == 'text'
         assert store['#0.span'] == 'text'
 
     def test_attribute_access_in_path(self):
         """Test ?attr in dotted path."""
         store = TreeStore()
-        store.setItem('div.span', color='red')
+        store.set_item('div.span', color='red')
         assert store['div.span?color'] == 'red'
 
 
@@ -549,14 +549,14 @@ class TestTreeStoreConversion:
     def test_as_dict_simple(self):
         """Test as_dict with simple values."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         assert store.as_dict() == {'a': 1, 'b': 2}
 
     def test_as_dict_nested(self):
         """Test as_dict with nested structure."""
         store = TreeStore()
-        store.setItem('div.span', 'text')
+        store.set_item('div.span', 'text')
         result = store.as_dict()
         assert 'div' in result
         assert result['div']['span'] == 'text'
@@ -564,7 +564,7 @@ class TestTreeStoreConversion:
     def test_as_dict_with_attributes(self):
         """Test as_dict preserves attributes."""
         store = TreeStore()
-        store.setItem('item', 'value', color='red')
+        store.set_item('item', 'value', color='red')
         result = store.as_dict()
         assert result['item']['_value'] == 'value'
         assert result['item']['color'] == 'red'
@@ -572,8 +572,8 @@ class TestTreeStoreConversion:
     def test_clear(self):
         """Test clear removes all nodes."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
         store.clear()
         assert len(store) == 0
 
@@ -616,10 +616,10 @@ class TestTreeStoreUpdate:
     def test_update_attributes(self):
         """Test update merges attributes."""
         store = TreeStore()
-        store.setItem('item', 'value1', color='red', size=10)
+        store.set_item('item', 'value1', color='red', size=10)
 
         other = TreeStore()
-        other.setItem('item', 'value2', color='blue', weight=5)
+        other.set_item('item', 'value2', color='blue', weight=5)
 
         store.update(other)
 
@@ -742,7 +742,7 @@ class TestTreeStoreBuilder:
         div = builder.child('div', color='red')
         assert isinstance(div, TreeStoreBuilder)
         assert 'div_0' in builder
-        assert builder.getNode('div_0').tag == 'div'
+        assert builder.get_node('div_0').tag == 'div'
         assert builder['div_0?color'] == 'red'
 
     def test_child_creates_leaf(self):
@@ -758,7 +758,7 @@ class TestTreeStoreBuilder:
         builder = TreeStoreBuilder()
         builder.child('div', label='main')
         assert 'main' in builder
-        assert builder.getNode('main').tag == 'div'
+        assert builder.get_node('main').tag == 'div'
 
     def test_auto_label_increments(self):
         """Test auto-labels increment per tag."""
@@ -875,14 +875,14 @@ class TestTreeStoreBuilder:
 class TestIntegration:
     """Integration tests."""
 
-    def test_bag_like_structure(self):
-        """Test building structure with Bag-like API."""
+    def test_hierarchical_structure(self):
+        """Test building hierarchical structure."""
         store = TreeStore()
 
-        # Build with setItem
-        store.setItem('config.database.host', 'localhost')
-        store.setItem('config.database.port', 5432)
-        store.setItem('config.cache.enabled', True)
+        # Build with set_item
+        store.set_item('config.database.host', 'localhost')
+        store.set_item('config.database.port', 5432)
+        store.set_item('config.cache.enabled', True)
 
         # Access values
         assert store['config.database.host'] == 'localhost'
@@ -943,15 +943,15 @@ class TestIntegration:
 
         # Chain branches
         (store
-            .setItem('html')
-            .setItem('body')
-            .setItem('div', id='main'))
+            .set_item('html')
+            .set_item('body')
+            .set_item('div', id='main'))
 
         assert store['html.body.div?id'] == 'main'
 
         # Chain leaves (returns parent)
-        ul = store.setItem('html.body.ul')
-        ul.setItem('li1', 'A').setItem('li2', 'B').setItem('li3', 'C')
+        ul = store.set_item('html.body.ul')
+        ul.set_item('li1', 'A').set_item('li2', 'B').set_item('li3', 'C')
 
         assert store['html.body.ul.li1'] == 'A'
         assert store['html.body.ul.li2'] == 'B'
@@ -959,93 +959,93 @@ class TestIntegration:
 
 
 class TestPositionParameter:
-    """Tests for _position parameter in setItem and child()."""
+    """Tests for _position parameter in set_item and child()."""
 
-    def test_setItem_position_append_default(self):
-        """Test setItem appends by default."""
+    def test_set_item_position_append_default(self):
+        """Test set_item appends by default."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
         assert store.keys() == ['a', 'b', 'c']
 
-    def test_setItem_position_prepend(self):
-        """Test setItem with _position='<' inserts at beginning."""
+    def test_set_item_position_prepend(self):
+        """Test set_item with _position='<' inserts at beginning."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('first', 0, _position='<')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('first', 0, _position='<')
         assert store.keys() == ['first', 'a', 'b']
         assert store['#0'] == 0
         assert store['#1'] == 1
 
-    def test_setItem_position_before_label(self):
-        """Test setItem with _position='<label' inserts before label."""
+    def test_set_item_position_before_label(self):
+        """Test set_item with _position='<label' inserts before label."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='<b')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='<b')
         assert store.keys() == ['a', 'inserted', 'b', 'c']
         assert store['#1'] == 99
         assert store['#2'] == 2
 
-    def test_setItem_position_after_label(self):
-        """Test setItem with _position='>label' inserts after label."""
+    def test_set_item_position_after_label(self):
+        """Test set_item with _position='>label' inserts after label."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='>a')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='>a')
         assert store.keys() == ['a', 'inserted', 'b', 'c']
         assert store['#0'] == 1
         assert store['#1'] == 99
 
-    def test_setItem_position_before_index(self):
-        """Test setItem with _position='<#N' inserts before position N."""
+    def test_set_item_position_before_index(self):
+        """Test set_item with _position='<#N' inserts before position N."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='<#1')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='<#1')
         assert store.keys() == ['a', 'inserted', 'b', 'c']
         assert store['#1'] == 99
 
-    def test_setItem_position_after_index(self):
-        """Test setItem with _position='>#N' inserts after position N."""
+    def test_set_item_position_after_index(self):
+        """Test set_item with _position='>#N' inserts after position N."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='>#0')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='>#0')
         assert store.keys() == ['a', 'inserted', 'b', 'c']
         assert store['#1'] == 99
 
-    def test_setItem_position_at_index(self):
-        """Test setItem with _position='#N' inserts at exact position N."""
+    def test_set_item_position_at_index(self):
+        """Test set_item with _position='#N' inserts at exact position N."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='#1')
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='#1')
         assert store.keys() == ['a', 'inserted', 'b', 'c']
         assert store['#1'] == 99
 
-    def test_setItem_position_negative_index(self):
-        """Test setItem with negative position index."""
+    def test_set_item_position_negative_index(self):
+        """Test set_item with negative position index."""
         store = TreeStore()
-        store.setItem('a', 1)
-        store.setItem('b', 2)
-        store.setItem('c', 3)
-        store.setItem('inserted', 99, _position='<#-1')  # before last
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        store.set_item('inserted', 99, _position='<#-1')  # before last
         assert store.keys() == ['a', 'b', 'inserted', 'c']
 
-    def test_setItem_position_branch(self):
+    def test_set_item_position_branch(self):
         """Test _position works for branch nodes too."""
         store = TreeStore()
-        store.setItem('first')
-        store.setItem('last')
-        store.setItem('middle', _position='<last')
+        store.set_item('first')
+        store.set_item('last')
+        store.set_item('middle', _position='<last')
         assert store.keys() == ['first', 'middle', 'last']
 
     def test_builder_child_position_prepend(self):
@@ -1056,7 +1056,7 @@ class TestPositionParameter:
         builder.child('div', _position='<')
         assert builder.keys() == ['div_2', 'div_0', 'div_1']
         assert builder['#0?'] is None  # div_2 is first
-        assert builder.getNode('#0').tag == 'div'
+        assert builder.get_node('#0').tag == 'div'
 
     def test_builder_child_position_before_label(self):
         """Test child() with _position='<label' inserts before label."""
@@ -1078,11 +1078,11 @@ class TestPositionParameter:
     def test_position_with_path(self):
         """Test _position works with nested paths."""
         store = TreeStore()
-        store.setItem('container.a', 1)
-        store.setItem('container.b', 2)
-        store.setItem('container.c', 3)
-        store.setItem('container.inserted', 99, _position='<b')
-        container = store.getNode('container').value
+        store.set_item('container.a', 1)
+        store.set_item('container.b', 2)
+        store.set_item('container.c', 3)
+        store.set_item('container.inserted', 99, _position='<b')
+        container = store.get_node('container').value
         assert container.keys() == ['a', 'inserted', 'b', 'c']
 
 
@@ -1228,7 +1228,7 @@ class TestBuilderWithGrammar:
         builder = TreeStoreBuilder(grammar=HtmlGrammar)
         div = builder.div(id='main')
         assert builder['div_0?id'] == 'main'
-        assert builder.getNode('div_0').tag == 'div'
+        assert builder.get_node('div_0').tag == 'div'
 
     def test_dynamic_tag_method_with_value(self):
         """Test dynamic tag method creating leaf node."""
