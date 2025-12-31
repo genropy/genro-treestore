@@ -74,6 +74,9 @@ dmypy.json
 # ruff
 .ruff_cache/
 
+# Sphinx documentation
+docs/_build/
+
 # Temp files
 temp/
 *.tmp

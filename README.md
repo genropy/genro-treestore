@@ -1,5 +1,12 @@
 # Genro-TreeStore
 
+[![PyPI version](https://img.shields.io/pypi/v/genro-treestore?cacheSeconds=300)](https://pypi.org/project/genro-treestore/)
+[![Tests](https://github.com/genropy/genro-treestore/actions/workflows/tests.yml/badge.svg)](https://github.com/genropy/genro-treestore/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/genropy/genro-treestore/branch/main/graph/badge.svg)](https://codecov.io/gh/genropy/genro-treestore)
+[![Documentation](https://readthedocs.org/projects/genro-treestore/badge/?version=latest)](https://genro-treestore.readthedocs.io/en/latest/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Hierarchical data structures with builder pattern support for the Genro ecosystem (Genro Kyō).
 
 ## Installation
@@ -81,6 +88,10 @@ pytest tests/
 # Run tests with coverage
 pytest tests/ --cov=src/genro_treestore --cov-report=term-missing
 ```
+
+## Documentation
+
+Full documentation is available at [genro-treestore.readthedocs.io](https://genro-treestore.readthedocs.io/).
 
 ## License
 
