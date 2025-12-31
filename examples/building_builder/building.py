@@ -3,8 +3,10 @@
 
 """BuildingBuilder - Example builder for building/apartment structures.
 
-A didactic example showing how to use @element decorator
-for structure validation.
+A didactic example showing how to use @element decorator for:
+- Structure validation with check parameter
+- Simple elements (single node)
+- Complex elements (nested structures created by a single method call)
 """
 
 from __future__ import annotations
@@ -88,6 +90,21 @@ class Building:
 class BuildingBuilder(BuilderBase):
     """Builder for describing building structures.
 
+    This builder demonstrates two types of elements:
+
+    1. SIMPLE ELEMENTS: Create a single node
+       - Most elements (floor, apartment, bed, table, etc.)
+       - Return a TreeStore (branch) or TreeStoreNode (leaf)
+
+    2. COMPLEX ELEMENTS: Create a nested structure
+       - Example: wardrobe(drawers=4, doors=2) creates:
+         wardrobe
+           └── chest_of_drawers
+           │     └── drawer (x4)
+           └── door (x2)
+       - A single method call creates multiple nodes
+       - Useful for composite structures with internal logic
+
     Hierarchy:
         building
           └── floor
@@ -97,6 +114,10 @@ class BuildingBuilder(BuilderBase):
                               kitchen: fridge, oven, sink, table, chair
                               bathroom: toilet, shower, sink
                               bedroom: bed, wardrobe, desk, chair
+                                wardrobe (COMPLEX):
+                                  └── chest_of_drawers
+                                  │     └── drawer (multiple)
+                                  └── door (multiple)
                               living_room: sofa, tv, table, chair
                               dining_room: table, chair
 
@@ -105,16 +126,16 @@ class BuildingBuilder(BuilderBase):
         >>> building = store.building(name='Casa Mia')
         >>> floor1 = building.floor(number=1)
         >>> apt = floor1.apartment(number='1A')
+        >>>
+        >>> # Simple elements
         >>> kitchen = apt.kitchen()
         >>> kitchen.fridge(brand='Samsung')
-        >>> kitchen.oven()
         >>>
-        >>> # This would be an error: fridge in dining_room
-        >>> dining = apt.dining_room()
-        >>> dining.fridge()  # Valid syntax, but check() will catch it
+        >>> # Complex element - creates nested structure
+        >>> bedroom = apt.bedroom()
+        >>> bedroom.wardrobe(drawers=6, doors=3, color='oak')
         >>>
         >>> errors = store.builder.check(building, parent_tag='building')
-        >>> # ['fridge is not a valid child of dining_room']
     """
 
     # === Building level ===
@@ -183,10 +204,71 @@ class BuildingBuilder(BuilderBase):
         """Create an appliance/fixture. Leaf element."""
         return self.child(target, tag, value='', **attr)
 
-    # === Furniture (leaf elements) ===
-    # Using tags parameter to map multiple tags to same method
+    # === Simple furniture (leaf elements) ===
 
-    @element(tags='bed, wardrobe, desk, table, chair, sofa, tv')
+    @element(tags='bed, desk, table, chair, sofa, tv')
     def furniture(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
-        """Create a piece of furniture. Leaf element."""
+        """Create a simple piece of furniture. Leaf element."""
+        return self.child(target, tag, value='', **attr)
+
+    # === Complex furniture (nested structures) ===
+    # A single method call can create multiple nodes
+
+    @element(check='chest_of_drawers[:1], door')
+    def wardrobe(
+        self, target: TreeStore, tag: str,
+        drawers: int = 4, doors: int = 2, **attr
+    ) -> TreeStore:
+        """Create a wardrobe with chest of drawers and doors.
+
+        This is an example of a COMPLEX ELEMENT: a single method call
+        creates a nested structure with multiple children.
+
+        Args:
+            target: The TreeStore to add to.
+            tag: The tag name (always 'wardrobe').
+            drawers: Number of drawers in the chest (default 4).
+            doors: Number of doors (default 2).
+            **attr: Additional attributes.
+
+        Returns:
+            The wardrobe TreeStore (for potential further customization).
+
+        Example:
+            >>> bedroom.wardrobe(drawers=6, doors=3, color='white')
+            # Creates:
+            # wardrobe (color=white)
+            #   └── chest_of_drawers
+            #   │     └── drawer (number=1)
+            #   │     └── drawer (number=2)
+            #   │     └── drawer (number=3)
+            #   │     └── drawer (number=4)
+            #   │     └── drawer (number=5)
+            #   │     └── drawer (number=6)
+            #   └── door (number=1)
+            #   └── door (number=2)
+            #   └── door (number=3)
+        """
+        wardrobe = self.child(target, tag, value=None, **attr)
+
+        # Create chest of drawers with N drawers
+        if drawers > 0:
+            chest = wardrobe.chest_of_drawers()
+            for i in range(drawers):
+                chest.drawer(number=i + 1)
+
+        # Create doors
+        for i in range(doors):
+            wardrobe.door(number=i + 1)
+
+        return wardrobe
+
+    @element(check='drawer')
+    def chest_of_drawers(self, target: TreeStore, tag: str, **attr) -> TreeStore:
+        """Create a chest of drawers container."""
+        return self.child(target, tag, value=None, **attr)
+
+    @element(tags='drawer, door')
+    def wardrobe_part(self, target: TreeStore, tag: str, **attr) -> TreeStoreNode:
+        """Create a wardrobe component (drawer or door). Leaf element."""
         return self.child(target, tag, value='', **attr)
