@@ -19,6 +19,7 @@ class TreeStoreNode:
     - attr: Dictionary of attributes
     - value: Either a scalar value or a TreeStore (for children)
     - parent: Reference to the containing TreeStore
+    - tag: Optional type/tag for the node (used by builders)
 
     Example:
         >>> node = TreeStoreNode('user', {'id': 1}, 'Alice')
@@ -28,7 +29,7 @@ class TreeStoreNode:
         'Alice'
     """
 
-    __slots__ = ('label', 'attr', 'value', 'parent')
+    __slots__ = ('label', 'attr', 'value', 'parent', 'tag')
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class TreeStoreNode:
         attr: dict[str, Any] | None = None,
         value: Any = None,
         parent: TreeStore | None = None,
+        tag: str | None = None,
     ) -> None:
         """Initialize a TreeStoreNode.
 
@@ -44,16 +46,13 @@ class TreeStoreNode:
             attr: Optional dictionary of attributes.
             value: The node's value (scalar or TreeStore for children).
             parent: The TreeStore containing this node.
+            tag: Optional type/tag for the node (used by builders).
         """
         self.label = label
         self.attr = attr or {}
         self.value = value
         self.parent = parent
-
-    @property
-    def tag(self) -> str | None:
-        """Get the node's tag (type) from attr['_tag'] if present."""
-        return self.attr.get('_tag')
+        self.tag = tag
 
     def __repr__(self) -> str:
         from .store import TreeStore
@@ -113,26 +112,3 @@ class TreeStoreNode:
         self.attr.update(kwargs)
 
 
-class BuilderNode(TreeStoreNode):
-    """A node with tag support for TreeStoreBuilder.
-
-    Extends TreeStoreNode with a separate tag attribute (not in attr dict).
-    """
-
-    __slots__ = ('_tag',)
-
-    def __init__(
-        self,
-        label: str,
-        attr: dict[str, Any] | None = None,
-        value: Any = None,
-        parent: TreeStore | None = None,
-        tag: str | None = None,
-    ) -> None:
-        super().__init__(label, attr, value, parent)
-        self._tag = tag
-
-    @property
-    def tag(self) -> str | None:
-        """Get the node's tag (type)."""
-        return self._tag

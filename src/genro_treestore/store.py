@@ -28,12 +28,13 @@ class TreeStore:
         'red'
     """
 
-    __slots__ = ('_nodes', '_order', 'parent')
+    __slots__ = ('_nodes', '_order', 'parent', '_builder')
 
     def __init__(
         self,
         source: dict | list | TreeStore | None = None,
         parent: TreeStoreNode | None = None,
+        builder: Any | None = None,
     ) -> None:
         """Initialize a TreeStore.
 
@@ -44,15 +45,20 @@ class TreeStore:
                 - TreeStore: Copy from another TreeStore
                 - list: List of tuples (label, value) or (label, value, attr)
             parent: The TreeStoreNode that contains this store as its value.
+            builder: Optional builder object that provides domain-specific methods.
+                When set, attribute access delegates to the builder, enabling
+                fluent API like store.div(), store.meta(), etc.
 
         Example:
             >>> TreeStore({'a': 1, 'b': {'c': 2}})
             >>> TreeStore([('x', 1), ('y', 2, {'color': 'red'})])
             >>> TreeStore(other_store)  # copy
+            >>> TreeStore(builder=HtmlBodyBuilder())  # with builder
         """
         self._nodes: dict[str, TreeStoreNode] = {}
         self._order: list[TreeStoreNode] = []
         self.parent = parent
+        self._builder = builder
 
         if source is not None:
             self._load_source(source)
@@ -100,7 +106,7 @@ class TreeStore:
 
                 if children:
                     # Branch node with children
-                    child_store = TreeStore()
+                    child_store = TreeStore(builder=self._builder)
                     node = TreeStoreNode(key, attr, value=child_store, parent=self)
                     child_store.parent = node
                     child_store._load_from_dict(children)
@@ -119,7 +125,7 @@ class TreeStore:
         for src_node in source._order:
             if src_node.is_branch:
                 # Recursively copy branch
-                child_store = TreeStore()
+                child_store = TreeStore(builder=self._builder)
                 node = TreeStoreNode(
                     src_node.label,
                     dict(src_node.attr),  # Copy attributes
@@ -161,14 +167,14 @@ class TreeStore:
 
             if isinstance(value, dict):
                 # Nested dict becomes branch
-                child_store = TreeStore()
+                child_store = TreeStore(builder=self._builder)
                 node = TreeStoreNode(label, attr, value=child_store, parent=self)
                 child_store.parent = node
                 child_store._load_from_dict(value)
                 self._insert_node(node)
             elif isinstance(value, list) and value and isinstance(value[0], tuple):
                 # Nested list of tuples becomes branch
-                child_store = TreeStore()
+                child_store = TreeStore(builder=self._builder)
                 node = TreeStoreNode(label, attr, value=child_store, parent=self)
                 child_store.parent = node
                 child_store._load_from_list(value)
@@ -197,6 +203,42 @@ class TreeStore:
             return True
         except KeyError:
             return False
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate attribute access to builder if present.
+
+        If a builder is set and has a method matching the name,
+        returns a callable that invokes the builder method with
+        this store as the target.
+
+        Args:
+            name: Attribute name (e.g., 'div', 'meta', 'span')
+
+        Returns:
+            Callable that creates a child via the builder.
+
+        Raises:
+            AttributeError: If no builder or builder has no such method.
+        """
+        if name.startswith('_'):
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        if self._builder is not None:
+            # Let the builder raise its own AttributeError with a descriptive message
+            handler = getattr(self._builder, name)
+            if callable(handler):
+                return lambda **attr: handler(self, **attr)
+
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+
+    @property
+    def builder(self) -> Any:
+        """Access the builder instance."""
+        return self._builder
 
     # ==================== Path Utilities ====================
 
@@ -319,7 +361,7 @@ class TreeStore:
                 if key not in current._nodes:
                     if autocreate:
                         # Create intermediate branch node
-                        child_store = TreeStore()
+                        child_store = TreeStore(builder=current._builder)
                         node = TreeStoreNode(key, {}, value=child_store, parent=current)
                         child_store.parent = node
                         current._insert_node(node)
@@ -330,7 +372,7 @@ class TreeStore:
             if not node.is_branch:
                 if autocreate:
                     # Convert leaf to branch
-                    child_store = TreeStore()
+                    child_store = TreeStore(builder=current._builder)
                     child_store.parent = node
                     node.value = child_store
                 else:
@@ -405,7 +447,7 @@ class TreeStore:
             return parent_store  # Return parent for chaining siblings
         else:
             # Branch node
-            child_store = TreeStore()
+            child_store = TreeStore(builder=parent_store._builder)
             node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
             child_store.parent = node
             parent_store._insert_node(node, _position)
@@ -849,7 +891,7 @@ class TreeStore:
                 # Node doesn't exist - add it
                 if other_node.is_branch:
                     # Deep copy the branch
-                    child_store = TreeStore()
+                    child_store = TreeStore(builder=self._builder)
                     node = TreeStoreNode(
                         label,
                         dict(other_node.attr),
