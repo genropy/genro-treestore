@@ -17,22 +17,71 @@ class BuilderBase(ABC):
     """Abstract base class for TreeStore builders.
 
     A builder provides domain-specific methods for creating nodes
-    in a TreeStore. Subclasses can:
+    in a TreeStore. Use the @element decorator to define tags:
 
-    1. Define explicit methods for each tag:
-        def div(self, target, **attr):
-            return self.child(target, 'div', **attr)
+    1. Single tag (method name used):
+        @element(children='item')
+        def menu(self, target, tag, **attr):
+            return self.child(target, tag, **attr)
 
-    2. Use __getattr__ with tag dictionaries for dynamic methods:
-        def __getattr__(self, name):
-            if name in self._tags:
-                return lambda target, **attr: self.child(target, name, **attr)
-            raise AttributeError(name)
+    2. Multiple tags pointing to same method:
+        @element(tags='fridge, oven, sink')
+        def appliance(self, target, tag, **attr):
+            return self.child(target, tag, value='', **attr)
+
+    The class automatically builds a _element_tags dict mapping
+    tag names to methods via __init_subclass__.
 
     Usage:
-        >>> store = TreeStore(builder=HtmlBuilder())
-        >>> store.div(id='main').span(value='Hello')
+        >>> store = TreeStore(builder=MyBuilder())
+        >>> store.fridge()  # calls appliance() with tag='fridge'
     """
+
+    # Class-level dict mapping tag -> method name
+    _element_tags: dict[str, str]
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Build the _element_tags dict from @element decorated methods."""
+        super().__init_subclass__(**kwargs)
+
+        # Start with parent's tags if any
+        cls._element_tags = {}
+        for base in cls.__mro__[1:]:
+            if hasattr(base, '_element_tags'):
+                cls._element_tags.update(base._element_tags)
+                break
+
+        # Scan class methods for @element decorated ones
+        for name, method in cls.__dict__.items():
+            if name.startswith('_'):
+                continue
+            if not callable(method):
+                continue
+
+            element_tags = getattr(method, '_element_tags', None)
+            if element_tags is None and hasattr(method, '_valid_children'):
+                # No explicit tags, use method name
+                cls._element_tags[name] = name
+            elif element_tags:
+                # Explicit tags specified
+                for tag in element_tags:
+                    cls._element_tags[tag] = name
+
+    def __getattr__(self, name: str) -> Any:
+        """Look up tag in _element_tags and return the bound method."""
+        if name.startswith('_'):
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        element_tags = getattr(type(self), '_element_tags', {})
+        if name in element_tags:
+            method_name = element_tags[name]
+            return getattr(self, method_name)
+
+        raise AttributeError(
+            f"'{type(self).__name__}' has no element '{name}'"
+        )
 
     def child(
         self,

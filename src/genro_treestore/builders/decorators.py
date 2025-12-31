@@ -65,13 +65,22 @@ def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
     return tag, min_count, max_count
 
 
-def element(children: str | tuple[str, ...] = '') -> Callable:
-    """Decorator to specify valid children tags for a builder method.
+def element(
+    tags: str | tuple[str, ...] = '',
+    children: str | tuple[str, ...] = ''
+) -> Callable:
+    """Decorator to define element tags and valid children for a builder method.
 
-    The decorated method's name is used as the parent tag.
+    The decorator registers the method as handler for the specified tags.
+    If no tags are specified, the method name is used as the tag.
     The validation rules are stored on the method for later use by validate().
 
     Args:
+        tags: Tag names this method handles. Can be:
+            - A comma-separated string: 'fridge, oven, sink'
+            - A tuple of strings: ('fridge', 'oven', 'sink')
+            If empty, the method name is used as the single tag.
+
         children: Valid child tag specs. Can be:
             - A comma-separated string: 'tag1, tag2[:1], tag3[1:]'
             - A tuple of strings: ('tag1', 'tag2[:1]', 'tag3[1:]')
@@ -86,22 +95,28 @@ def element(children: str | tuple[str, ...] = '') -> Callable:
 
     Example:
         >>> class MyBuilder(BuilderBase):
-        ...     # String syntax
-        ...     @element(children='section, item[1:]')
-        ...     def menu(self, target, **attr):
-        ...         return self.child(target, 'menu', **attr)
+        ...     # Multiple tags pointing to same method
+        ...     @element(tags='fridge, oven, sink')
+        ...     def appliance(self, target, tag, **attr):
+        ...         return self.child(target, tag, value='', **attr)
         ...
-        ...     # Tuple syntax
-        ...     @element(children=('fridge[:1]', 'oven[:2]', 'sink', 'table'))
-        ...     def kitchen(self, target, **attr):
-        ...         return self.child(target, 'kitchen', **attr)
+        ...     # Single tag (method name used)
+        ...     @element(children='section, item[1:]')
+        ...     def menu(self, target, tag, **attr):
+        ...         return self.child(target, tag, **attr)
         ...
         ...     @element()  # No children allowed (leaf)
-        ...     def item(self, target, **attr):
-        ...         return self.child(target, 'item', value='', **attr)
+        ...     def item(self, target, tag, **attr):
+        ...         return self.child(target, tag, value='', **attr)
     """
-    # Parse all tag specs - accept both string and tuple
-    parsed: dict[str, tuple[int, int | None]] = {}
+    # Parse tags - accept both string and tuple
+    if isinstance(tags, str):
+        tag_list = [t.strip() for t in tags.split(',') if t.strip()]
+    else:
+        tag_list = list(tags)
+
+    # Parse children specs - accept both string and tuple
+    parsed_children: dict[str, tuple[int, int | None]] = {}
 
     if isinstance(children, str):
         specs = [s.strip() for s in children.split(',') if s.strip()]
@@ -110,7 +125,7 @@ def element(children: str | tuple[str, ...] = '') -> Callable:
 
     for spec in specs:
         tag, min_c, max_c = _parse_tag_spec(spec)
-        parsed[tag] = (min_c, max_c)
+        parsed_children[tag] = (min_c, max_c)
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -120,8 +135,12 @@ def element(children: str | tuple[str, ...] = '') -> Callable:
         # Store validation rules on the function
         # _valid_children: set of allowed tag names
         # _child_cardinality: dict mapping tag -> (min, max)
-        wrapper._valid_children = frozenset(parsed.keys())
-        wrapper._child_cardinality = parsed
+        wrapper._valid_children = frozenset(parsed_children.keys())
+        wrapper._child_cardinality = parsed_children
+
+        # Store tags this method handles
+        # If no tags specified, will use method name (set in __init_subclass__)
+        wrapper._element_tags = tuple(tag_list) if tag_list else None
 
         return wrapper
 
