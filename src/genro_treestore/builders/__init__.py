@@ -6,7 +6,6 @@
 from .base import BuilderBase
 from .decorators import element, valid_children
 from .html import HtmlBuilder, HtmlHeadBuilder, HtmlBodyBuilder, HtmlPage
-from .building import Building, BuildingBuilder
 
 __all__ = [
     'BuilderBase',
@@ -16,6 +15,4 @@ __all__ = [
     'HtmlHeadBuilder',
     'HtmlBodyBuilder',
     'HtmlPage',
-    'Building',
-    'BuildingBuilder',
 ]

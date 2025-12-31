@@ -9,14 +9,8 @@ for structure validation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-from .base import BuilderBase
-from .decorators import element
-
-if TYPE_CHECKING:
-    from ..store import TreeStore
-    from ..node import TreeStoreNode
+from genro_treestore import TreeStore, TreeStoreNode
+from genro_treestore.builders import BuilderBase, element
 
 
 class Building:
@@ -53,8 +47,6 @@ class Building:
             name: The building name.
             **attr: Additional attributes for the building node.
         """
-        from ..store import TreeStore
-
         self._store = TreeStore(builder=BuildingBuilder())
         self._root = self._store.building(name=name, **attr)
 
