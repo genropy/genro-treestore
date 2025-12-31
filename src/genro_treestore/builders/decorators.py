@@ -5,10 +5,23 @@
 
 from __future__ import annotations
 
+import inspect
 import re
 from functools import wraps
-from typing import Callable, Any
+from typing import Callable, Any, TYPE_CHECKING
 
+# Try to import Pydantic (optional dependency)
+try:
+    from pydantic import BaseModel, ValidationError, create_model
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    BaseModel = None  # type: ignore
+    ValidationError = None  # type: ignore
+    create_model = None  # type: ignore
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel as BaseModelType
 
 # Pattern for tag with optional cardinality: tag, tag[n], tag[n:], tag[:m], tag[n:m]
 _TAG_PATTERN = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\[(\d*):?(\d*)\])?$')
@@ -65,9 +78,91 @@ def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
     return tag, min_count, max_count
 
 
+def _create_model_from_signature(func: Callable, model_name: str) -> type | None:
+    """Create a Pydantic model from function signature.
+
+    Extracts typed parameters (excluding self, target, tag, **kwargs)
+    and creates a dynamic Pydantic model for validation.
+
+    Returns None if no typed parameters found or Pydantic not available.
+    """
+    if not PYDANTIC_AVAILABLE:
+        return None
+
+    sig = inspect.signature(func)
+    fields: dict[str, Any] = {}
+
+    # Skip these parameters - they're not user attributes
+    skip_params = {'self', 'target', 'tag'}
+
+    for name, param in sig.parameters.items():
+        if name in skip_params:
+            continue
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            # **kwargs - skip
+            continue
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            # *args - skip
+            continue
+
+        # Get annotation and default
+        annotation = param.annotation
+        if annotation is inspect.Parameter.empty:
+            # No type annotation, skip
+            continue
+
+        if param.default is inspect.Parameter.empty:
+            # Required field
+            fields[name] = (annotation, ...)
+        else:
+            # Optional field with default
+            fields[name] = (annotation, param.default)
+
+    if not fields:
+        return None
+
+    return create_model(model_name, **fields)
+
+
+def _parse_tags_with_models(
+    tags: str | tuple
+) -> tuple[list[str], dict[str, type]]:
+    """Parse tags parameter, extracting any per-tag models.
+
+    Args:
+        tags: Can be:
+            - str: 'fridge, oven, sink'
+            - tuple[str, ...]: ('fridge', 'oven', 'sink')
+            - tuple[tuple[str, type], ...]: (('fridge', FridgeModel), ('oven', OvenModel))
+
+    Returns:
+        Tuple of (tag_list, tag_models_dict)
+    """
+    tag_list: list[str] = []
+    tag_models: dict[str, type] = {}
+
+    if isinstance(tags, str):
+        tag_list = [t.strip() for t in tags.split(',') if t.strip()]
+    elif isinstance(tags, tuple) and tags:
+        # Check if it's tuple of tuples (tag, model) or tuple of strings
+        first = tags[0]
+        if isinstance(first, tuple):
+            # Tuple of (tag, model) pairs
+            for item in tags:
+                tag_name, model = item
+                tag_list.append(tag_name)
+                tag_models[tag_name] = model
+        else:
+            # Tuple of strings
+            tag_list = list(tags)
+
+    return tag_list, tag_models
+
+
 def element(
-    tags: str | tuple[str, ...] = '',
-    children: str | tuple[str, ...] = ''
+    tags: str | tuple[str, ...] | tuple[tuple[str, type], ...] = '',
+    children: str | tuple[str, ...] = '',
+    validate: bool | type = False
 ) -> Callable:
     """Decorator to define element tags and valid children for a builder method.
 
@@ -79,6 +174,8 @@ def element(
         tags: Tag names this method handles. Can be:
             - A comma-separated string: 'fridge, oven, sink'
             - A tuple of strings: ('fridge', 'oven', 'sink')
+            - A tuple of (tag, Model) pairs for per-tag validation:
+              (('fridge', FridgeModel), ('oven', OvenModel))
             If empty, the method name is used as the single tag.
 
         children: Valid child tag specs. Can be:
@@ -92,6 +189,12 @@ def element(
             - 'tag[:m]' - at most m allowed
             - 'tag[n:m]' - between n and m (inclusive)
             Empty string or empty tuple means no children allowed (leaf node).
+
+        validate: Pydantic validation mode (requires pydantic installed):
+            - False: no validation (default)
+            - True: auto-create model from function signature
+            - BaseModel subclass: use that model for all tags
+            Per-tag models can also be specified via tags parameter.
 
     Example:
         >>> class MyBuilder(BuilderBase):
@@ -108,12 +211,24 @@ def element(
         ...     @element()  # No children allowed (leaf)
         ...     def item(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
+        ...
+        ...     # With Pydantic validation from signature
+        ...     @element(validate=True)
+        ...     def floor(self, target, tag, number: int = 0, **attr):
+        ...         return self.child(target, tag, number=number, **attr)
+        ...
+        ...     # With explicit Pydantic model
+        ...     @element(validate=ApartmentModel)
+        ...     def apartment(self, target, tag, **attr):
+        ...         return self.child(target, tag, **attr)
+        ...
+        ...     # With per-tag models
+        ...     @element(tags=(('fridge', FridgeModel), ('oven', OvenModel)))
+        ...     def appliance(self, target, tag, **attr):
+        ...         return self.child(target, tag, value='', **attr)
     """
-    # Parse tags - accept both string and tuple
-    if isinstance(tags, str):
-        tag_list = [t.strip() for t in tags.split(',') if t.strip()]
-    else:
-        tag_list = list(tags)
+    # Parse tags - handle string, tuple of strings, or tuple of (tag, model) pairs
+    tag_list, tag_models = _parse_tags_with_models(tags)
 
     # Parse children specs - accept both string and tuple
     parsed_children: dict[str, tuple[int, int | None]] = {}
@@ -128,8 +243,46 @@ def element(
         parsed_children[tag] = (min_c, max_c)
 
     def decorator(func: Callable) -> Callable:
+        # Determine validation model(s)
+        # Priority: per-tag models > explicit model > signature-based model
+        signature_model: type | None = None
+        explicit_model: type | None = None
+
+        if validate is True and PYDANTIC_AVAILABLE:
+            # Create model from function signature
+            signature_model = _create_model_from_signature(func, f'{func.__name__}_Model')
+        elif validate is not False and PYDANTIC_AVAILABLE:
+            # validate is a BaseModel subclass
+            if isinstance(validate, type) and issubclass(validate, BaseModel):
+                explicit_model = validate
+
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            # Perform validation if Pydantic is available and validation is enabled
+            if PYDANTIC_AVAILABLE and (tag_models or explicit_model or signature_model):
+                # Get the tag from kwargs (injected by TreeStore dispatch)
+                current_tag = kwargs.get('tag')
+
+                # Determine which model to use
+                model_to_use: type | None = None
+                if current_tag and current_tag in tag_models:
+                    # Per-tag model has highest priority
+                    model_to_use = tag_models[current_tag]
+                elif explicit_model:
+                    model_to_use = explicit_model
+                elif signature_model:
+                    model_to_use = signature_model
+
+                if model_to_use:
+                    # Extract only the kwargs that the model knows about
+                    model_fields = set(model_to_use.model_fields.keys())
+                    attrs_to_validate = {
+                        k: v for k, v in kwargs.items()
+                        if k in model_fields
+                    }
+                    # Validate - will raise ValidationError if invalid
+                    model_to_use(**attrs_to_validate)
+
             return func(*args, **kwargs)
 
         # Store validation rules on the function
@@ -141,6 +294,10 @@ def element(
         # Store tags this method handles
         # If no tags specified, will use method name (set in __init_subclass__)
         wrapper._element_tags = tuple(tag_list) if tag_list else None
+
+        # Store validation info for introspection
+        wrapper._validation_model = explicit_model or signature_model
+        wrapper._tag_models = tag_models if tag_models else None
 
         return wrapper
 
