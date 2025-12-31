@@ -916,6 +916,92 @@ class TreeStore:
         self._nodes.clear()
         self._order.clear()
 
+    def update(
+        self,
+        other: dict | list | TreeStore,
+        ignore_none: bool = False,
+    ) -> None:
+        """Update this TreeStore with data from another source.
+
+        For each item in other:
+        - If label exists: updates attributes, and if both are branches,
+          recursively updates children; otherwise replaces value
+        - If label doesn't exist: adds the new node
+
+        Args:
+            other: Source data (dict, list of tuples, or TreeStore)
+            ignore_none: If True, don't update values that are None
+
+        Example:
+            >>> store = TreeStore({'config': {'a': 1, 'b': 2}})
+            >>> store.update({'config': {'b': 3, 'c': 4}})
+            >>> store['config.a']  # 1 (preserved)
+            >>> store['config.b']  # 3 (updated)
+            >>> store['config.c']  # 4 (added)
+        """
+        # Convert source to TreeStore if needed
+        if isinstance(other, dict):
+            other_store = TreeStore(other)
+        elif isinstance(other, list):
+            other_store = TreeStore(other)
+        elif isinstance(other, TreeStore):
+            other_store = other
+        else:
+            raise TypeError(
+                f"other must be dict, list, or TreeStore, not {type(other).__name__}"
+            )
+
+        self._update_from_treestore(other_store, ignore_none)
+
+    def _update_from_treestore(
+        self,
+        other: TreeStore,
+        ignore_none: bool = False,
+    ) -> None:
+        """Update this TreeStore from another TreeStore."""
+        for other_node in other._order:
+            label = other_node.label
+            other_value = other_node.value
+
+            if label in self._nodes:
+                # Node exists - update it
+                curr_node = self._nodes[label]
+
+                # Update attributes
+                curr_node.attr.update(other_node.attr)
+
+                # Handle value
+                if isinstance(other_value, TreeStore) and curr_node.is_branch:
+                    # Both are branches - recursive update
+                    curr_node.value._update_from_treestore(other_value, ignore_none)
+                else:
+                    # Replace value (unless ignore_none and value is None)
+                    if not ignore_none or other_value is not None:
+                        curr_node.value = other_value
+            else:
+                # Node doesn't exist - add it
+                if other_node.is_branch:
+                    # Deep copy the branch
+                    child_store = TreeStore()
+                    node = TreeStoreNode(
+                        label,
+                        dict(other_node.attr),
+                        value=child_store,
+                        parent=self,
+                    )
+                    child_store.parent = node
+                    child_store._load_from_treestore(other_value)
+                    self._insert_node(node)
+                else:
+                    # Copy leaf
+                    node = TreeStoreNode(
+                        label,
+                        dict(other_node.attr),
+                        value=other_value,
+                        parent=self,
+                    )
+                    self._insert_node(node)
+
     def get(self, label: str, default: Any = None) -> TreeStoreNode | None:
         """Get node by label at this level, with default."""
         return self._nodes.get(label, default)

@@ -578,6 +578,106 @@ class TestTreeStoreConversion:
         assert len(store) == 0
 
 
+class TestTreeStoreUpdate:
+    """Tests for TreeStore.update() method."""
+
+    def test_update_simple_values(self):
+        """Test update replaces simple values."""
+        store = TreeStore({'a': 1, 'b': 2})
+        store.update({'b': 3, 'c': 4})
+        assert store['a'] == 1  # preserved
+        assert store['b'] == 3  # updated
+        assert store['c'] == 4  # added
+
+    def test_update_recursive_branches(self):
+        """Test update merges branches recursively."""
+        store = TreeStore({
+            'config': {
+                'database': {'host': 'localhost', 'port': 5432},
+                'cache': {'enabled': True},
+            }
+        })
+        store.update({
+            'config': {
+                'database': {'port': 3306, 'user': 'admin'},
+            }
+        })
+
+        # Original values preserved
+        assert store['config.database.host'] == 'localhost'
+        assert store['config.cache.enabled'] is True
+
+        # Updated value
+        assert store['config.database.port'] == 3306
+
+        # New value added
+        assert store['config.database.user'] == 'admin'
+
+    def test_update_attributes(self):
+        """Test update merges attributes."""
+        store = TreeStore()
+        store.setItem('item', 'value1', color='red', size=10)
+
+        other = TreeStore()
+        other.setItem('item', 'value2', color='blue', weight=5)
+
+        store.update(other)
+
+        assert store['item'] == 'value2'  # value updated
+        assert store['item?color'] == 'blue'  # attr updated
+        assert store['item?size'] == 10  # attr preserved
+        assert store['item?weight'] == 5  # attr added
+
+    def test_update_from_dict(self):
+        """Test update accepts dict source."""
+        store = TreeStore({'a': 1})
+        store.update({'a': 2, 'b': 3})
+        assert store['a'] == 2
+        assert store['b'] == 3
+
+    def test_update_from_list(self):
+        """Test update accepts list of tuples."""
+        store = TreeStore({'a': 1})
+        store.update([('a', 2), ('b', 3, {'color': 'red'})])
+        assert store['a'] == 2
+        assert store['b'] == 3
+        assert store['b?color'] == 'red'
+
+    def test_update_from_treestore(self):
+        """Test update accepts TreeStore."""
+        store = TreeStore({'a': 1})
+        other = TreeStore({'a': 2, 'b': 3})
+        store.update(other)
+        assert store['a'] == 2
+        assert store['b'] == 3
+
+    def test_update_ignore_none(self):
+        """Test update with ignore_none=True."""
+        store = TreeStore({'a': 1, 'b': 2})
+        store.update({'a': None, 'b': 3}, ignore_none=True)
+        assert store['a'] == 1  # None ignored
+        assert store['b'] == 3  # updated
+
+    def test_update_branch_replaces_leaf(self):
+        """Test update replaces leaf with branch."""
+        store = TreeStore({'config': 'simple'})
+        store.update({'config': {'host': 'localhost'}})
+        # Branch replaces the leaf value
+        assert store['config.host'] == 'localhost'
+
+    def test_update_leaf_replaces_branch(self):
+        """Test update replaces branch with leaf."""
+        store = TreeStore({'config': {'host': 'localhost'}})
+        store.update({'config': 'simple'})
+        assert store['config'] == 'simple'
+
+    def test_update_invalid_type_raises(self):
+        """Test update with invalid type raises TypeError."""
+        store = TreeStore()
+        with pytest.raises(TypeError, match="must be dict, list, or TreeStore"):
+            store.update("invalid")
+
+
 class TestParseCardinality:
     """Tests for cardinality parsing."""
 
