@@ -15,7 +15,7 @@ from genro_treestore import (
     TooManyChildrenError,
     Grammar,
 )
-from genro_treestore.treestore import _parse_cardinality
+from genro_treestore.grammar import _parse_cardinality
 
 
 class TestTreeStoreNode:
@@ -1089,7 +1089,7 @@ class TestPositionParameter:
 # ==================== Grammar System Tests ====================
 
 from genro_treestore import Grammar, element, InvalidParentError
-from genro_treestore.treestore import _parse_cardinality_symbol
+from genro_treestore.grammar import _parse_cardinality_symbol
 
 
 class TestParseCardinalitySymbol:

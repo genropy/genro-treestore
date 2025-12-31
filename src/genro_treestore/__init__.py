@@ -9,30 +9,33 @@ for the Genro ecosystem (Genro Kyō).
 
 __version__ = "0.1.0"
 
-from .treestore import (
-    TreeStore,
-    TreeStoreNode,
-    BuilderNode,
-    TreeStoreBuilder,
-    valid_children,
+from .builder import TreeStoreBuilder
+from .exceptions import (
     InvalidChildError,
+    InvalidParentError,
     MissingChildError,
     TooManyChildrenError,
-    InvalidParentError,
-    Grammar,
-    element,
+    TreeStoreError,
 )
+from .grammar import Grammar, element, valid_children
+from .node import BuilderNode, TreeStoreNode
+from .store import TreeStore
 
 __all__ = [
+    # Core classes
     "TreeStore",
     "TreeStoreNode",
+    # Builder classes
     "BuilderNode",
     "TreeStoreBuilder",
+    # Grammar
+    "Grammar",
+    "element",
     "valid_children",
+    # Exceptions
+    "TreeStoreError",
     "InvalidChildError",
     "MissingChildError",
     "TooManyChildrenError",
     "InvalidParentError",
-    "Grammar",
-    "element",
 ]
