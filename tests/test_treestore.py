@@ -526,7 +526,7 @@ class TestTreeStoreBuilder:
         div = builder.child('div', color='red')
         assert isinstance(div, TreeStoreBuilder)
         assert 'div_0' in builder
-        assert builder['div_0?_tag'] == 'div'
+        assert builder.getNode('div_0').tag == 'div'
         assert builder['div_0?color'] == 'red'
 
     def test_child_creates_leaf(self):
@@ -542,7 +542,7 @@ class TestTreeStoreBuilder:
         builder = TreeStoreBuilder()
         builder.child('div', label='main')
         assert 'main' in builder
-        assert builder['main?_tag'] == 'div'
+        assert builder.getNode('main').tag == 'div'
 
     def test_auto_label_increments(self):
         """Test auto-labels increment per tag."""

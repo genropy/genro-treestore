@@ -12,6 +12,7 @@ __version__ = "0.1.0"
 from .treestore import (
     TreeStore,
     TreeStoreNode,
+    BuilderNode,
     TreeStoreBuilder,
     valid_children,
     InvalidChildError,
@@ -22,6 +23,7 @@ from .treestore import (
 __all__ = [
     "TreeStore",
     "TreeStoreNode",
+    "BuilderNode",
     "TreeStoreBuilder",
     "valid_children",
     "InvalidChildError",

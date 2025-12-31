@@ -118,6 +118,31 @@ class TreeStoreNode:
         self.attr.update(kwargs)
 
 
+class BuilderNode(TreeStoreNode):
+    """A node with tag support for TreeStoreBuilder.
+
+    Extends TreeStoreNode with a separate tag attribute (not in attr dict).
+    """
+
+    __slots__ = ('_tag',)
+
+    def __init__(
+        self,
+        label: str,
+        attr: dict[str, Any] | None = None,
+        value: Any = None,
+        parent: TreeStore | None = None,
+        tag: str | None = None,
+    ) -> None:
+        super().__init__(label, attr, value, parent)
+        self._tag = tag
+
+    @property
+    def tag(self) -> str | None:
+        """Get the node's tag (type)."""
+        return self._tag
+
+
 class TreeStore:
     """A Bag-like hierarchical data container with O(1) lookup.
 
@@ -136,7 +161,7 @@ class TreeStore:
         'red'
     """
 
-    __slots__ = ('_nodes', 'parent', '_tag', '_tag_counters')
+    __slots__ = ('_nodes', '_order', 'parent')
 
     def __init__(self, parent: TreeStoreNode | None = None) -> None:
         """Initialize a TreeStore.
@@ -145,9 +170,8 @@ class TreeStore:
             parent: The TreeStoreNode that contains this store as its value.
         """
         self._nodes: dict[str, TreeStoreNode] = {}
+        self._order: list[TreeStoreNode] = []  # Maintains insertion order for positional access
         self.parent = parent
-        self._tag: str | None = None  # Tag for validation context (used by Builder)
-        self._tag_counters: dict[str, int] = {}  # For auto-labeling in Builder
 
     def __repr__(self) -> str:
         return f"TreeStore({list(self._nodes.keys())})"
@@ -156,8 +180,8 @@ class TreeStore:
         return len(self._nodes)
 
     def __iter__(self) -> Iterator[TreeStoreNode]:
-        """Iterate over nodes (not labels)."""
-        return iter(self._nodes.values())
+        """Iterate over nodes in insertion order."""
+        return iter(self._order)
 
     def __contains__(self, label: str) -> bool:
         """Check if a label exists at root level or as a path."""
@@ -184,13 +208,79 @@ class TreeStore:
         return False, segment
 
     def _get_node_by_position(self, index: int) -> TreeStoreNode:
-        """Get node by positional index."""
-        labels = list(self._nodes.keys())
+        """Get node by positional index (O(1) via _order list)."""
         if index < 0:
-            index = len(labels) + index
-        if index < 0 or index >= len(labels):
-            raise KeyError(f"Position #{index} out of range (0-{len(labels)-1})")
-        return self._nodes[labels[index]]
+            index = len(self._order) + index
+        if index < 0 or index >= len(self._order):
+            raise KeyError(f"Position #{index} out of range (0-{len(self._order)-1})")
+        return self._order[index]
+
+    def _index_of(self, label: str) -> int:
+        """Get the position index of a label (O(n))."""
+        for i, node in enumerate(self._order):
+            if node.label == label:
+                return i
+        raise KeyError(f"Label '{label}' not found")
+
+    def _insert_node(self, node: TreeStoreNode, position: str | None = None) -> None:
+        """Insert a node into both _nodes dict and _order list.
+
+        Args:
+            node: The node to insert.
+            position: Position specifier (Bag-style):
+                - None or '>': append to end (default)
+                - '<': insert at beginning
+                - '<label': insert before label
+                - '>label': insert after label
+                - '<#N': insert before position N
+                - '>#N': insert after position N
+                - '#N': insert at exact position N
+        """
+        self._nodes[node.label] = node
+
+        if position is None or position == '>':
+            self._order.append(node)
+        elif position == '<':
+            self._order.insert(0, node)
+        elif position.startswith('<#'):
+            idx = int(position[2:])
+            if idx < 0:
+                idx = len(self._order) + idx
+            self._order.insert(idx, node)
+        elif position.startswith('>#'):
+            idx = int(position[2:]) + 1
+            if idx < 0:
+                idx = len(self._order) + idx + 1
+            self._order.insert(idx, node)
+        elif position.startswith('<'):
+            label = position[1:]
+            idx = self._index_of(label)
+            self._order.insert(idx, node)
+        elif position.startswith('>'):
+            label = position[1:]
+            idx = self._index_of(label) + 1
+            self._order.insert(idx, node)
+        elif position.startswith('#'):
+            idx = int(position[1:])
+            if idx < 0:
+                idx = len(self._order) + idx
+            self._order.insert(idx, node)
+        else:
+            # Unknown position, append to end
+            self._order.append(node)
+
+    def _remove_node(self, label: str) -> TreeStoreNode:
+        """Remove a node from both _nodes dict and _order list.
+
+        Args:
+            label: The label of the node to remove.
+
+        Returns:
+            The removed node.
+        """
+        node = self._nodes.pop(label)
+        self._order.remove(node)
+        return node
 
     def _htraverse(
         self, path: str, autocreate: bool = False
@@ -224,15 +314,10 @@ class TreeStore:
                 if key not in current._nodes:
                     if autocreate:
                         # Create intermediate branch node
-                        child_store = current.__class__.__new__(current.__class__)
-                        child_store._nodes = {}
-                        child_store.parent = None
-                        child_store._tag = None
-                        child_store._tag_counters = {}
-
+                        child_store = TreeStore()
                         node = TreeStoreNode(key, {}, value=child_store, parent=current)
                         child_store.parent = node
-                        current._nodes[key] = node
+                        current._insert_node(node)
                     else:
                         raise KeyError(f"Path segment '{key}' not found")
                 node = current._nodes[key]
@@ -240,11 +325,8 @@ class TreeStore:
             if not node.is_branch:
                 if autocreate:
                     # Convert leaf to branch
-                    child_store = current.__class__.__new__(current.__class__)
-                    child_store._nodes = {}
+                    child_store = TreeStore()
                     child_store.parent = node
-                    child_store._tag = None
-                    child_store._tag_counters = {}
                     node.value = child_store
                 else:
                     remaining = '.'.join(parts[i+1:])
@@ -304,19 +386,14 @@ class TreeStore:
         if value is not None:
             # Leaf node
             node = TreeStoreNode(label, final_attr, value, parent=parent_store)
-            parent_store._nodes[label] = node
+            parent_store._insert_node(node)
             return parent_store  # Return parent for chaining siblings
         else:
             # Branch node
-            child_store = self.__class__.__new__(self.__class__)
-            child_store._nodes = {}
-            child_store.parent = None
-            child_store._tag = None
-            child_store._tag_counters = {}
-
+            child_store = TreeStore()
             node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
             child_store.parent = node
-            parent_store._nodes[label] = node
+            parent_store._insert_node(node)
             return child_store  # Return child store for chaining children
 
     def getItem(self, path: str, default: Any = None) -> Any:
@@ -461,10 +538,10 @@ class TreeStore:
             The removed TreeStoreNode.
         """
         if '.' not in path:
-            return self._nodes.pop(path)
+            return self._remove_node(path)
 
         parent_store, label = self._htraverse(path, autocreate=False)
-        return parent_store._nodes.pop(label)
+        return parent_store._remove_node(label)
 
     def pop(self, path: str, default: Any = None) -> Any:
         """Remove and return value at path.
@@ -650,7 +727,7 @@ class TreeStore:
     def clear(self) -> None:
         """Remove all nodes."""
         self._nodes.clear()
-        self._tag_counters.clear()
+        self._order.clear()
 
     def get(self, label: str, default: Any = None) -> TreeStoreNode | None:
         """Get node by label at this level, with default."""
@@ -754,6 +831,15 @@ class TreeStoreBuilder(TreeStore):
         >>> ul.li('Item 2')
     """
 
+    __slots__ = ('_tag_counters',)
+
+    node_factory: type[TreeStoreNode] = BuilderNode
+
+    def __init__(self, parent: TreeStoreNode | None = None) -> None:
+        """Initialize a TreeStoreBuilder."""
+        super().__init__(parent)
+        self._tag_counters: dict[str, int] = {}
+
     @property
     def store(self) -> TreeStore:
         """Access the underlying TreeStore."""
@@ -776,16 +862,20 @@ class TreeStoreBuilder(TreeStore):
 
     def _get_valid_children(self) -> dict[str, tuple[int, int | None]] | None:
         """Get valid children from the method that created this context."""
-        if self._tag is None:
+        if self.parent is None:
+            return None
+
+        tag = self.parent.tag
+        if tag is None:
             return None
 
         # Find the method for this tag on the builder class
-        method = getattr(self.__class__, self._tag, None)
+        method = getattr(self.__class__, tag, None)
         if method is None:
             # Try on root builder if we're a child store
             root = self.root
             if root is not self:
-                method = getattr(root.__class__, self._tag, None)
+                method = getattr(root.__class__, tag, None)
 
         if method is None:
             return None
@@ -819,7 +909,7 @@ class TreeStoreBuilder(TreeStore):
         value: Any = None,
         attributes: dict[str, Any] | None = None,
         **attr: Any
-    ) -> TreeStoreBuilder | TreeStoreNode:
+    ) -> TreeStoreBuilder | BuilderNode:
         """Create a child node with auto-generated label.
 
         Args:
@@ -830,14 +920,14 @@ class TreeStoreBuilder(TreeStore):
             **attr: Node attributes as kwargs.
 
         Returns:
-            TreeStoreBuilder if branch (for adding children), TreeStoreNode if leaf.
+            TreeStoreBuilder if branch (for adding children), BuilderNode if leaf.
 
         Examples:
             >>> div = builder.child('div', color='red')  # branch, label='div_0'
             >>> builder.child('li', value='Hello')       # leaf, label='li_0'
         """
-        # Merge attributes, add _tag
-        final_attr: dict[str, Any] = {'_tag': tag}
+        # Merge attributes
+        final_attr: dict[str, Any] = {}
         if attributes:
             final_attr.update(attributes)
         final_attr.update(attr)
@@ -851,21 +941,15 @@ class TreeStoreBuilder(TreeStore):
 
         if value is not None:
             # Create leaf node
-            node = TreeStoreNode(label, final_attr, value, parent=self)
-            self._nodes[label] = node
+            node = self.node_factory(label, final_attr, value, parent=self, tag=tag)
+            self._insert_node(node)
             return node
         else:
             # Create branch node with new Builder instance
-            child_builder = self.__class__.__new__(self.__class__)
-            child_builder._nodes = {}
-            child_builder.parent = None
-            child_builder._tag = None
-            child_builder._tag_counters = {}
-
-            node = TreeStoreNode(label, final_attr, value=child_builder, parent=self)
+            child_builder = self.__class__()
+            node = self.node_factory(label, final_attr, value=child_builder, parent=self, tag=tag)
             child_builder.parent = node
-            child_builder._tag = tag  # For validation context
-            self._nodes[label] = node
+            self._insert_node(node)
             return child_builder
 
     def reindex(self) -> None:
