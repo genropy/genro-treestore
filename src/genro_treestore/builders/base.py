@@ -20,7 +20,7 @@ class BuilderBase(ABC):
     in a TreeStore. Use the @element decorator to define tags:
 
     1. Single tag (method name used):
-        @element(children='item')
+        @element(check='item')
         def menu(self, target, tag, **attr):
             return self.child(target, tag, **attr)
 
@@ -165,25 +165,25 @@ class BuilderBase(ABC):
         cardinality = getattr(method, '_child_cardinality', {})
         return valid, cardinality
 
-    def validate(
+    def check(
         self,
         store: TreeStore,
         parent_tag: str | None = None,
         path: str = ''
     ) -> list[str]:
-        """Validate the TreeStore structure against this builder's rules.
+        """Check the TreeStore structure against this builder's rules.
 
-        Checks validation rules defined via @valid_children decorator:
+        Checks structure rules defined via @element(check=...) decorator:
         - valid_children: which tags can be children of this tag
         - cardinality: per-tag min/max constraints using slice syntax
 
         Args:
-            store: The TreeStore to validate.
+            store: The TreeStore to check.
             parent_tag: The tag of the parent node (for context).
             path: Current path in the tree (for error messages).
 
         Returns:
-            List of validation error messages (empty if valid).
+            List of error messages (empty if valid).
         """
         errors = []
 
@@ -214,9 +214,9 @@ class BuilderBase(ABC):
                         f"'{parent_tag}' cannot have children"
                     )
 
-            # Recursively validate branch children
+            # Recursively check branch children
             if not node.is_leaf:
-                child_errors = self.validate(node.value, parent_tag=child_tag, path=node_path)
+                child_errors = self.check(node.value, parent_tag=child_tag, path=node_path)
                 errors.extend(child_errors)
 
         # Check per-tag cardinality constraints

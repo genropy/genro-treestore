@@ -27,16 +27,16 @@ class Building:
         >>> kitchen.fridge(brand='Samsung')
         >>> kitchen.oven()
         >>>
-        >>> # Validate the structure
-        >>> errors = casa.validate()
+        >>> # Check the structure
+        >>> errors = casa.check()
         >>> if errors:
         ...     for e in errors:
         ...         print(e)
         >>>
         >>> # Invalid: fridge in dining_room
         >>> dining = apt.dining_room()
-        >>> dining.fridge()  # This will be caught by validate()
-        >>> errors = casa.validate()
+        >>> dining.fridge()  # This will be caught by check()
+        >>> errors = casa.check()
         >>> # ['fridge is not a valid child of dining_room...']
     """
 
@@ -64,13 +64,13 @@ class Building:
         """Add a floor to the building."""
         return self._root.floor(number=number, **attr)
 
-    def validate(self) -> list[str]:
-        """Validate the building structure.
+    def check(self) -> list[str]:
+        """Check the building structure.
 
         Returns:
-            List of validation error messages (empty if valid).
+            List of error messages (empty if valid).
         """
-        return self._store.builder.validate(self._root, parent_tag='building')
+        return self._store.builder.check(self._root, parent_tag='building')
 
     def print_tree(self):
         """Print the building structure for debugging."""
@@ -111,29 +111,29 @@ class BuildingBuilder(BuilderBase):
         >>>
         >>> # This would be an error: fridge in dining_room
         >>> dining = apt.dining_room()
-        >>> dining.fridge()  # Valid syntax, but validate() will catch it
+        >>> dining.fridge()  # Valid syntax, but check() will catch it
         >>>
-        >>> errors = store.validate()
+        >>> errors = store.builder.check(building, parent_tag='building')
         >>> # ['fridge is not a valid child of dining_room']
     """
 
     # === Building level ===
 
-    @element(children=('floor',))
+    @element(check='floor')
     def building(self, target: TreeStore, tag: str, name: str = '', **attr) -> TreeStore:
         """Create a building. Can contain only floors."""
         return self.child(target, tag, value=None, name=name, **attr)
 
     # === Floor level ===
 
-    @element(children=('apartment', 'corridor', 'stairs'))
+    @element(check='apartment, corridor, stairs')
     def floor(self, target: TreeStore, tag: str, number: int = 0, **attr) -> TreeStore:
         """Create a floor. Can contain apartments, corridors, stairs."""
         return self.child(target, tag, value=None, number=number, **attr)
 
     # === Floor elements ===
 
-    @element(children=('kitchen[:1]', 'bathroom[1:]', 'bedroom', 'living_room[:1]', 'dining_room[:1]'))
+    @element(check='kitchen[:1], bathroom[1:], bedroom, living_room[:1], dining_room[:1]')
     def apartment(self, target: TreeStore, tag: str, number: str = '', **attr) -> TreeStore:
         """Create an apartment. Must have at least 1 bathroom, max 1 kitchen/living/dining."""
         return self.child(target, tag, value=None, number=number, **attr)
@@ -150,27 +150,27 @@ class BuildingBuilder(BuilderBase):
 
     # === Rooms ===
 
-    @element(children=('fridge[:1]', 'oven[:2]', 'sink[:1]', 'table', 'chair'))
+    @element(check='fridge[:1], oven[:2], sink[:1], table, chair')
     def kitchen(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a kitchen. Max 1 fridge, max 2 ovens, max 1 sink."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(children=('toilet[:1]', 'shower[:1]', 'sink[:1]'))
+    @element(check='toilet[:1], shower[:1], sink[:1]')
     def bathroom(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a bathroom. Max 1 of each fixture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(children=('bed', 'wardrobe', 'desk', 'chair'))
+    @element(check='bed, wardrobe, desk, chair')
     def bedroom(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a bedroom. Can contain bedroom furniture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(children=('sofa', 'tv', 'table', 'chair'))
+    @element(check='sofa, tv, table, chair')
     def living_room(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a living room. Can contain living room furniture."""
         return self.child(target, tag, value=None, **attr)
 
-    @element(children=('table', 'chair'))
+    @element(check='table, chair')
     def dining_room(self, target: TreeStore, tag: str, **attr) -> TreeStore:
         """Create a dining room. Can contain dining furniture."""
         return self.child(target, tag, value=None, **attr)

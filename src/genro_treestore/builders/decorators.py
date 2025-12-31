@@ -161,24 +161,23 @@ def _parse_tags_with_models(
 
 def element(
     tags: str | tuple[str, ...] | tuple[tuple[str, type], ...] = '',
-    children: str | tuple[str, ...] = '',
+    check: str | tuple[str, ...] = '',
     validate: bool | type = False
 ) -> Callable:
-    """Decorator to define element tags and valid children for a builder method.
+    """Decorator to define element tags and validation rules for a builder method.
 
     The decorator registers the method as handler for the specified tags.
     If no tags are specified, the method name is used as the tag.
-    The validation rules are stored on the method for later use by validate().
 
     Args:
         tags: Tag names this method handles. Can be:
             - A comma-separated string: 'fridge, oven, sink'
             - A tuple of strings: ('fridge', 'oven', 'sink')
-            - A tuple of (tag, Model) pairs for per-tag validation:
+            - A tuple of (tag, Model) pairs for per-tag attribute validation:
               (('fridge', FridgeModel), ('oven', OvenModel))
             If empty, the method name is used as the single tag.
 
-        children: Valid child tag specs. Can be:
+        check: Valid child tag specs for structure validation. Can be:
             - A comma-separated string: 'tag1, tag2[:1], tag3[1:]'
             - A tuple of strings: ('tag1', 'tag2[:1]', 'tag3[1:]')
 
@@ -190,7 +189,7 @@ def element(
             - 'tag[n:m]' - between n and m (inclusive)
             Empty string or empty tuple means no children allowed (leaf node).
 
-        validate: Pydantic validation mode (requires pydantic installed):
+        validate: Pydantic attribute validation (requires pydantic installed):
             - False: no validation (default)
             - True: auto-create model from function signature
             - BaseModel subclass: use that model for all tags
@@ -203,8 +202,8 @@ def element(
         ...     def appliance(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
         ...
-        ...     # Single tag (method name used)
-        ...     @element(children='section, item[1:]')
+        ...     # Structure validation with check
+        ...     @element(check='section, item[1:]')
         ...     def menu(self, target, tag, **attr):
         ...         return self.child(target, tag, **attr)
         ...
@@ -212,17 +211,17 @@ def element(
         ...     def item(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
         ...
-        ...     # With Pydantic validation from signature
+        ...     # Attribute validation from signature
         ...     @element(validate=True)
         ...     def floor(self, target, tag, number: int = 0, **attr):
         ...         return self.child(target, tag, number=number, **attr)
         ...
-        ...     # With explicit Pydantic model
+        ...     # Explicit Pydantic model for attributes
         ...     @element(validate=ApartmentModel)
         ...     def apartment(self, target, tag, **attr):
         ...         return self.child(target, tag, **attr)
         ...
-        ...     # With per-tag models
+        ...     # Per-tag attribute models
         ...     @element(tags=(('fridge', FridgeModel), ('oven', OvenModel)))
         ...     def appliance(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
@@ -230,13 +229,13 @@ def element(
     # Parse tags - handle string, tuple of strings, or tuple of (tag, model) pairs
     tag_list, tag_models = _parse_tags_with_models(tags)
 
-    # Parse children specs - accept both string and tuple
+    # Parse check specs - accept both string and tuple
     parsed_children: dict[str, tuple[int, int | None]] = {}
 
-    if isinstance(children, str):
-        specs = [s.strip() for s in children.split(',') if s.strip()]
+    if isinstance(check, str):
+        specs = [s.strip() for s in check.split(',') if s.strip()]
     else:
-        specs = list(children)
+        specs = list(check)
 
     for spec in specs:
         tag, min_c, max_c = _parse_tag_spec(spec)
