@@ -17,28 +17,42 @@ class BuilderBase(ABC):
     """Abstract base class for TreeStore builders.
 
     A builder provides domain-specific methods for creating nodes
-    in a TreeStore. Use the @element decorator to define tags:
+    in a TreeStore. There are two ways to define elements:
 
-    1. Single tag (method name used):
+    1. Using @element decorator on methods:
         @element(children='item')
         def menu(self, target, tag, **attr):
             return self.child(target, tag, **attr)
 
-    2. Multiple tags pointing to same method:
         @element(tags='fridge, oven, sink')
         def appliance(self, target, tag, **attr):
             return self.child(target, tag, value='', **attr)
 
-    The class automatically builds a _element_tags dict mapping
-    tag names to methods via __init_subclass__.
+    2. Using _schema dict for external/dynamic definitions:
+        class HtmlBuilder(BuilderBase):
+            _schema = {
+                'div': {'children': FLOW_CONTENT},
+                'br': {'leaf': True},
+                'img': {'leaf': True, 'model': ImgModel},
+            }
+
+    Schema keys:
+        - children: str or set of allowed child tags
+        - leaf: True if element has no children (value='')
+        - model: Pydantic model for attribute validation
+
+    The lookup order is: decorated methods first, then _schema.
 
     Usage:
         >>> store = TreeStore(builder=MyBuilder())
         >>> store.fridge()  # calls appliance() with tag='fridge'
     """
 
-    # Class-level dict mapping tag -> method name
+    # Class-level dict mapping tag -> method name (from @element decorator)
     _element_tags: dict[str, str]
+
+    # Schema dict for external element definitions (optional)
+    _schema: dict[str, dict] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Build the _element_tags dict from @element decorated methods."""
@@ -68,20 +82,99 @@ class BuilderBase(ABC):
                     cls._element_tags[tag] = name
 
     def __getattr__(self, name: str) -> Any:
-        """Look up tag in _element_tags and return the bound method."""
+        """Look up tag in _element_tags or _schema and return handler."""
         if name.startswith('_'):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
             )
 
+        # First, check decorated methods
         element_tags = getattr(type(self), '_element_tags', {})
         if name in element_tags:
             method_name = element_tags[name]
             return getattr(self, method_name)
 
+        # Then, check _schema
+        schema = getattr(self, '_schema', {})
+        if name in schema:
+            return self._make_schema_handler(name, schema[name])
+
         raise AttributeError(
             f"'{type(self).__name__}' has no element '{name}'"
         )
+
+    def _make_schema_handler(self, tag: str, spec: dict):
+        """Create a handler function for a schema-defined element.
+
+        Args:
+            tag: The tag name.
+            spec: Schema spec dict with keys: children, leaf, model.
+
+        Returns:
+            A callable that creates the element.
+        """
+        is_leaf = spec.get('leaf', False)
+        model = spec.get('model')
+
+        def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
+            # Validate attributes with Pydantic model if specified
+            if model is not None:
+                try:
+                    from pydantic import BaseModel
+                    if isinstance(model, type) and issubclass(model, BaseModel):
+                        model_fields = set(model.model_fields.keys())
+                        attrs_to_validate = {
+                            k: v for k, v in attr.items()
+                            if k in model_fields
+                        }
+                        model(**attrs_to_validate)
+                except ImportError:
+                    pass  # Pydantic not available
+
+            # Determine value: user-provided > leaf default > branch (None)
+            if value is None and is_leaf:
+                value = ''
+            return self.child(target, tag, label=label, value=value, **attr)
+
+        # Store validation rules on the handler for check() to find
+        children_spec = spec.get('children')
+        if children_spec is not None:
+            handler._valid_children, handler._child_cardinality = \
+                self._parse_children_spec(children_spec)
+        else:
+            # No children spec = leaf element (no children allowed)
+            handler._valid_children = frozenset()
+            handler._child_cardinality = {}
+
+        return handler
+
+    def _parse_children_spec(
+        self, spec: str | set | frozenset
+    ) -> tuple[frozenset[str], dict[str, tuple[int, int | None]]]:
+        """Parse a children spec into validation rules.
+
+        Args:
+            spec: Can be:
+                - str: 'tag1, tag2[:1], tag3[1:]'
+                - set/frozenset: {'tag1', 'tag2', 'tag3'}
+
+        Returns:
+            Tuple of (valid_children frozenset, cardinality dict).
+        """
+        from .decorators import _parse_tag_spec
+
+        if isinstance(spec, (set, frozenset)):
+            # Simple set of tags, no cardinality
+            return frozenset(spec), {}
+
+        # Parse string spec with cardinality
+        parsed: dict[str, tuple[int, int | None]] = {}
+        specs = [s.strip() for s in spec.split(',') if s.strip()]
+        for tag_spec in specs:
+            tag, min_c, max_c = _parse_tag_spec(tag_spec)
+            parsed[tag] = (min_c, max_c)
+
+        return frozenset(parsed.keys()), parsed
 
     def child(
         self,
@@ -143,7 +236,7 @@ class BuilderBase(ABC):
     def _get_validation_rules(
         self, tag: str | None
     ) -> tuple[frozenset[str] | None, dict[str, tuple[int, int | None]]]:
-        """Get validation rules for a tag from decorated methods.
+        """Get validation rules for a tag from decorated methods or schema.
 
         Args:
             tag: The tag name to look up. None means root level.
@@ -157,13 +250,28 @@ class BuilderBase(ABC):
         if tag is None:
             return None, {}
 
-        method = getattr(self, tag, None)
-        if method is None:
-            return None, {}
+        # First, check decorated methods
+        element_tags = getattr(type(self), '_element_tags', {})
+        if tag in element_tags:
+            method_name = element_tags[tag]
+            method = getattr(self, method_name, None)
+            if method is not None:
+                valid = getattr(method, '_valid_children', None)
+                cardinality = getattr(method, '_child_cardinality', {})
+                return valid, cardinality
 
-        valid = getattr(method, '_valid_children', None)
-        cardinality = getattr(method, '_child_cardinality', {})
-        return valid, cardinality
+        # Then, check _schema
+        schema = getattr(self, '_schema', {})
+        if tag in schema:
+            spec = schema[tag]
+            children_spec = spec.get('children')
+            if children_spec is not None:
+                return self._parse_children_spec(children_spec)
+            else:
+                # No children spec = leaf element
+                return frozenset(), {}
+
+        return None, {}
 
     def check(
         self,
