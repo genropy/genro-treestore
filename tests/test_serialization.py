@@ -22,7 +22,11 @@ Note:
 from datetime import date, datetime, time
 from decimal import Decimal
 
-from genro_tytx.utils import tytx_equivalent
+import pytest
+
+# Skip entire module if genro-tytx is not installed
+genro_tytx = pytest.importorskip("genro_tytx")
+tytx_equivalent = genro_tytx.utils.tytx_equivalent
 
 from genro_treestore import TreeStore, BuilderBase
 

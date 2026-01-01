@@ -12,10 +12,11 @@ Part of **genro-modules** (Apache 2.0 license).
 genro-treestore/
 ├── src/genro_treestore/
 │   ├── __init__.py      # Public API exports
-│   ├── treestore.py     # TreeStore, TreeStoreNode, TreeStoreBuilder
+│   ├── store/           # TreeStore, TreeStoreNode
+│   ├── builders/        # BuilderBase, HtmlBuilder
+│   ├── resolvers/       # TreeStoreResolver, CallbackResolver
 │   └── py.typed         # PEP 561 marker
 ├── tests/
-│   └── test_treestore.py
 ├── pyproject.toml
 ├── LICENSE              # Apache 2.0
 ├── NOTICE
@@ -28,8 +29,8 @@ genro-treestore/
 from genro_treestore import (
     TreeStore,           # Container of nodes with builder methods
     TreeStoreNode,       # Node with label, attr, value
-    TreeStoreBuilder,    # Base for typed builders
-    valid_children,      # Decorator for child validation
+    BuilderBase,         # Base for typed builders
+    element,             # Decorator for builder methods
     InvalidChildError,   # Invalid child tag
     MissingChildError,   # Missing mandatory child
     TooManyChildrenError,# Too many children of type

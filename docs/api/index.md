@@ -65,7 +65,6 @@ from genro_treestore import (
 
     # Builder decorators
     element,
-    valid_children,
 
     # Resolvers
     TreeStoreResolver,

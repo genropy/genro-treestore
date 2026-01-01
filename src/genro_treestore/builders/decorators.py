@@ -346,7 +346,3 @@ def _validate_attrs_from_spec(
 
     if errors:
         raise ValueError("Attribute validation failed: " + "; ".join(errors))
-
-
-# Alias for backwards compatibility
-valid_children = element

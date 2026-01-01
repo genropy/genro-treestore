@@ -118,49 +118,56 @@ for path, node in store.walk():
     print(path, node.value)
 ```
 
-## TreeStoreBuilder (Builder Pattern)
+## Using Builders (Builder Pattern)
 
-For structured data with auto-labeling and validation.
+Builders provide typed APIs with auto-labeling and validation.
 
-### Basic Builder
+### Using HtmlBuilder
 
 ```python
-from genro_treestore import TreeStoreBuilder
+from genro_treestore import TreeStore
+from genro_treestore.builders import HtmlBuilder
 
-builder = TreeStoreBuilder()
+store = TreeStore(builder=HtmlBuilder())
 
-# child() creates nodes with auto-labels
-div = builder.child('div', color='red')  # label: div_0
-span = div.child('span', value='Hello')  # label: span_0
+# Fluent API - methods create nodes with auto-labels
+div = store.div(id='main')         # creates div_0
+span = div.span(value='Hello')     # creates span_0 under div_0
+div.p(value='World')               # creates p_0 under div_0
 
-builder['div_0.span_0']  # 'Hello'
-builder['div_0?color']   # 'red'
+# Access by auto-generated labels
+store['div_0.span_0']  # 'Hello'
+store['div_0?id']      # 'main'
 ```
 
-### Typed Builder
+### Creating Custom Builders
 
 ```python
-from genro_treestore import TreeStoreBuilder, valid_children
+from genro_treestore import TreeStore
+from genro_treestore.builders import BuilderBase, element
 
-class HtmlBuilder(TreeStoreBuilder):
-    def div(self, **attr):
-        return self.child('div', **attr)
+class MyBuilder(BuilderBase):
+    @element(children='li')  # ul can only contain li children
+    def ul(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-    @valid_children('li')  # Only 'li' allowed
-    def ul(self, **attr):
-        return self.child('ul', **attr)
+    @element()  # li is a leaf (no children)
+    def li(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
 
-    def li(self, value=None, **attr):
-        return self.child('li', value=value, **attr)
+    @element()
+    def div(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-builder = HtmlBuilder()
-div = builder.div(id='container')
+# Usage
+store = TreeStore(builder=MyBuilder())
+div = store.div(id='container')
 ul = div.ul()
-ul.li('Item 1')
-ul.li('Item 2')
+ul.li(value='Item 1')
+ul.li(value='Item 2')
 
 # Auto-labels: div_0, ul_0, li_0, li_1
-builder['div_0.ul_0.li_0']  # 'Item 1'
+store['div_0.ul_0.li_0']  # 'Item 1'
 ```
 
 ## Next Steps

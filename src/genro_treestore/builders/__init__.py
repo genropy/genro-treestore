@@ -14,22 +14,20 @@ Builder Types:
 
 Decorators:
     - **@element**: Define an element handler with validation rules
-    - **@valid_children**: Specify allowed child tags with cardinality
 
 Creating Custom Builders:
-    Extend BuilderBase and use decorators or _schema dict::
+    Extend BuilderBase and use the @element decorator::
 
-        from genro_treestore.builders import BuilderBase, element, valid_children
+        from genro_treestore.builders import BuilderBase, element
 
         class MyBuilder(BuilderBase):
-            @element
-            @valid_children('item[1:]')  # At least one item required
-            def container(self, store, parent, **attrs):
-                pass
+            @element(children='item[1:]')  # At least one item required
+            def container(self, target, tag, **attr):
+                return self.child(target, tag, **attr)
 
-            @element
-            def item(self, store, parent, value=None, **attrs):
-                pass
+            @element()
+            def item(self, target, tag, value=None, **attr):
+                return self.child(target, tag, value=value, **attr)
 
 Example:
     Using HtmlBuilder for type-safe HTML generation::
@@ -50,14 +48,13 @@ See Also:
 """
 
 from .base import BuilderBase
-from .decorators import element, valid_children
+from .decorators import element
 from .html import HtmlBuilder, HtmlHeadBuilder, HtmlBodyBuilder, HtmlPage
 from .xsd import XsdBuilder
 
 __all__ = [
     "BuilderBase",
     "element",
-    "valid_children",
     "HtmlBuilder",
     "HtmlHeadBuilder",
     "HtmlBodyBuilder",

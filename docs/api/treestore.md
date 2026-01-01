@@ -1,7 +1,7 @@
-# TreeStore Module
+# Store Module
 
 ```{eval-rst}
-.. automodule:: genro_treestore.treestore
+.. automodule:: genro_treestore.store
    :members:
    :undoc-members:
    :show-inheritance:
@@ -29,22 +29,10 @@
    :special-members: __init__, __getitem__, __setitem__, __iter__, __len__
 ```
 
-### TreeStoreBuilder
+## See Also
 
-```{eval-rst}
-.. autoclass:: genro_treestore.TreeStoreBuilder
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-## Decorators
-
-### valid_children
-
-```{eval-rst}
-.. autofunction:: genro_treestore.valid_children
-```
+- [Builders Module](builders.md) - BuilderBase and typed builders
+- [Resolvers Module](resolvers.md) - Lazy value resolution
 
 ## Exceptions
 

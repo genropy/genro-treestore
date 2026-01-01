@@ -77,7 +77,6 @@ from .builders import (
     HtmlPage,
     XsdBuilder,
     element,
-    valid_children,
 )
 from .exceptions import (
     InvalidChildError,
@@ -116,7 +115,6 @@ __all__ = [
     "XsdBuilder",
     # Builder decorators
     "element",
-    "valid_children",
     # Subscription types
     "SubscriberCallback",
     # Exceptions

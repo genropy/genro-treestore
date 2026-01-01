@@ -266,29 +266,31 @@ graph TD
 ```
 
 ```python
-from genro_treestore.builders import BuilderBase, element, valid_children
+from genro_treestore import TreeStore
+from genro_treestore.builders import BuilderBase, element
 
 class DocBuilder(BuilderBase):
-    @element
-    @valid_children('section[1:]')  # At least one section required
-    def document(self, store, parent, **attrs):
-        pass
+    @element(children='section[1:]')  # At least one section required
+    def document(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-    @element
-    @valid_children(
-        'title[1]',      # Exactly one title required
-        'para[0:]',      # Zero or more paragraphs
-    )
-    def section(self, store, parent, **attrs):
-        pass
+    @element(children='title[1], para')  # One title required, any paragraphs
+    def section(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-    @element
-    def title(self, store, parent, value=None, **attrs):
-        pass
+    @element()
+    def title(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
 
-    @element
-    def para(self, store, parent, value=None, **attrs):
-        pass
+    @element()
+    def para(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
+
+store = TreeStore(builder=DocBuilder())
+doc = store.document()
+sec = doc.section()
+sec.title(value='Chapter 1')
+sec.para(value='First paragraph.')
 ```
 
 ### Cardinality Syntax

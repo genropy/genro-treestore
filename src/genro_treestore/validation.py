@@ -24,10 +24,15 @@ class ValidationSubscriber:
     children constraints are revalidated on each event.
 
     Error handling depends on store._raise_on_error:
-    - Hard errors (invalid attributes, invalid child tag, too many children):
+    - Hard errors (invalid attributes, too many children):
       Raise ValueError if raise_on_error=True, otherwise just collect.
     - Soft errors (missing required children / min not reached):
       Never raise - always just collect. User can add children later.
+
+    Note:
+        Invalid child tag validation is handled by the builder itself in
+        _check_child(), not by this subscriber. This subscriber only handles
+        attribute validation and cardinality constraints.
 
     Example:
         >>> store = TreeStore(builder=HtmlBuilder())

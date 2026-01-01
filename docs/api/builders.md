@@ -39,8 +39,7 @@ graph TB
 ```
 
 ```{note}
-`valid_children` is an alias for `element` - they are the same decorator.
-The `element` decorator handles both tag registration and children validation.
+The `element` decorator handles both tag registration and children validation via the `children` parameter.
 ```
 
 ## HtmlBuilder

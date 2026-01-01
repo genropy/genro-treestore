@@ -62,7 +62,7 @@ class InvalidChildError(TreeStoreError):
     a tag that violates the builder's structural rules. Common causes:
 
     - Adding a child to a void/leaf element (e.g., children under <br>)
-    - Tag not in the parent's valid_children list
+    - Tag not in the parent's allowed children list
     - Tag explicitly excluded from the parent
 
     Example:
@@ -72,7 +72,7 @@ class InvalidChildError(TreeStoreError):
         InvalidChildError: 'div' is not a valid child of 'ul'
 
     See Also:
-        - :func:`~genro_treestore.builders.decorators.valid_children`
+        - :func:`~genro_treestore.builders.decorators.element`
         - :class:`~genro_treestore.builders.base.BuilderBase`
     """
 

@@ -34,8 +34,7 @@ Path Syntax:
         store['config.database.host']     # Dotted path
         store['users.#0.name']            # Positional index
         store['users.#-1']                # Negative index (last)
-        store['config.?timeout']          # Attribute access
-        store['items.*.price']            # Wildcard (iteration)
+        store['config?timeout']           # Attribute access
 
 Example:
     Basic usage with nested data::

@@ -1,10 +1,10 @@
 # Typed Builders
 
-TreeStoreBuilder provides a base class for creating domain-specific builders with a fluent API.
+BuilderBase provides an abstract base class for creating domain-specific builders with a fluent API.
 
 ## Why Use Builders?
 
-Instead of using generic `child()` calls, builders let you:
+Instead of using generic `set_item()` calls, builders let you:
 
 - Create **type-safe** methods for specific node types
 - Add **validation** for child relationships
@@ -14,56 +14,62 @@ Instead of using generic `child()` calls, builders let you:
 ## Basic Builder
 
 ```python
-from genro_treestore import TreeStoreBuilder
+from genro_treestore import TreeStore
+from genro_treestore.builders import BuilderBase, element
 
-class HtmlBuilder(TreeStoreBuilder):
-    def div(self, **attr):
+class HtmlBuilder(BuilderBase):
+    @element()
+    def div(self, target, tag, **attr):
         """Create a div element."""
-        return self.child('div', **attr)
+        return self.child(target, tag, **attr)
 
-    def span(self, value=None, **attr):
+    @element()
+    def span(self, target, tag, value=None, **attr):
         """Create a span element with optional text."""
-        return self.child('span', value=value, **attr)
+        return self.child(target, tag, value=value, **attr)
 
-    def ul(self, **attr):
+    @element()
+    def ul(self, target, tag, **attr):
         """Create an unordered list."""
-        return self.child('ul', **attr)
+        return self.child(target, tag, **attr)
 
-    def li(self, value=None, **attr):
+    @element()
+    def li(self, target, tag, value=None, **attr):
         """Create a list item."""
-        return self.child('li', value=value, **attr)
+        return self.child(target, tag, value=value, **attr)
 ```
 
 ### Using the Builder
 
 ```python
-builder = HtmlBuilder()
+store = TreeStore(builder=HtmlBuilder())
 
 # Build structure
-main = builder.div(id='main')
+main = store.div(id='main')
 header = main.div(class_='header')
-header.span('Welcome!')
+header.span(value='Welcome!')
 
 nav = main.ul(class_='nav')
-nav.li('Home')
-nav.li('About')
-nav.li('Contact')
+nav.li(value='Home')
+nav.li(value='About')
+nav.li(value='Contact')
 
-# Access the underlying store
-store = builder.store
+# Access values
+store['div_0.div_0.span_0']  # 'Welcome!'
+store['div_0?id']  # 'main'
 ```
 
 ## Method Chaining
 
-Builder methods return new builder instances, enabling fluent chaining:
+Builder methods return new TreeStore/TreeStoreNode instances, enabling fluent chaining:
 
 ```python
-builder = HtmlBuilder()
+store = TreeStore(builder=HtmlBuilder())
 
-(builder
+(store
     .div(id='container')
     .div(class_='content')
-    .span('Nested content'))
+    .span(value='Nested content'))
 ```
 
 ## Custom Constructors
@@ -71,24 +77,46 @@ builder = HtmlBuilder()
 Add specialized methods for common patterns:
 
 ```python
-class HtmlBuilder(TreeStoreBuilder):
-    def div(self, **attr):
-        return self.child('div', **attr)
+class HtmlBuilder(BuilderBase):
+    @element()
+    def div(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-    def link(self, href, text):
+    @element()
+    def a(self, target, tag, href='#', value=None, **attr):
         """Create an anchor element."""
-        return self.child('a', href=href, value=text)
+        return self.child(target, tag, href=href, value=value, **attr)
 
-    def image(self, src, alt=''):
+    @element()
+    def img(self, target, tag, src='', alt='', **attr):
         """Create an image element."""
-        return self.child('img', src=src, alt=alt)
+        return self.child(target, tag, src=src, alt=alt, value='', **attr)
+```
 
-    def list_from_items(self, items):
-        """Create a ul with multiple li children."""
-        ul = self.ul()
-        for item in items:
-            ul.li(item)
-        return ul
+## Child Validation
+
+Use the `children` parameter to specify which child tags are allowed:
+
+```python
+class HtmlBuilder(BuilderBase):
+    @element(children='li')  # Only 'li' children allowed
+    def ul(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
+
+    @element()  # Leaf element (no children)
+    def li(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
+
+    @element()
+    def span(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
+
+# Usage
+store = TreeStore(builder=HtmlBuilder())
+ul = store.ul()
+ul.li(value='Item 1')  # OK
+ul.li(value='Item 2')  # OK
+ul.span(value='Bad!')  # Raises InvalidChildError
 ```
 
 ## Inheritance
@@ -96,19 +124,23 @@ class HtmlBuilder(TreeStoreBuilder):
 Extend builders for specialized domains:
 
 ```python
-class BaseBuilder(TreeStoreBuilder):
-    def container(self, **attr):
-        return self.child('container', **attr)
+class BaseBuilder(BuilderBase):
+    @element()
+    def container(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
 class FormBuilder(BaseBuilder):
-    def input(self, name, type_='text', **attr):
-        return self.child('input', name=name, type=type_, **attr)
+    @element()
+    def input(self, target, tag, name='', type_='text', **attr):
+        return self.child(target, tag, name=name, type=type_, value='', **attr)
 
-    def button(self, label, **attr):
-        return self.child('button', value=label, **attr)
+    @element()
+    def button(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
 
-    def form(self, action='', method='POST', **attr):
-        return self.child('form', action=action, method=method, **attr)
+    @element(children='input, button')
+    def form(self, target, tag, action='', method='POST', **attr):
+        return self.child(target, tag, action=action, method=method, **attr)
 ```
 
 ## Type Hints
@@ -118,50 +150,54 @@ Add type hints for better IDE support:
 ```python
 from typing import Self
 
-class HtmlBuilder(TreeStoreBuilder):
-    def div(self, **attr) -> Self:
+class HtmlBuilder(BuilderBase):
+    @element()
+    def div(self, target, tag, **attr) -> TreeStore:
         """Create a div element."""
-        return self.child('div', **attr)
+        return self.child(target, tag, **attr)
 
-    def span(self, value: str | None = None, **attr) -> Self:
+    @element()
+    def span(self, target, tag, value: str | None = None, **attr) -> TreeStoreNode:
         """Create a span element."""
-        return self.child('span', value=value, **attr)
+        return self.child(target, tag, value=value, **attr)
 ```
 
 ## Complete Example
 
 ```python
-from genro_treestore import TreeStoreBuilder, valid_children
+from genro_treestore import TreeStore
+from genro_treestore.builders import BuilderBase, element
 
-class MenuBuilder(TreeStoreBuilder):
+class MenuBuilder(BuilderBase):
     """Builder for navigation menus."""
 
-    @valid_children('item', 'submenu')
-    def menu(self, title: str, **attr):
+    @element(children='item, submenu')
+    def menu(self, target, tag, title: str = '', **attr):
         """Create a menu container."""
-        return self.child('menu', title=title, **attr)
+        return self.child(target, tag, title=title, **attr)
 
-    @valid_children('item', 'submenu')
-    def submenu(self, title: str, **attr):
+    @element(children='item, submenu')
+    def submenu(self, target, tag, title: str = '', **attr):
         """Create a submenu."""
-        return self.child('submenu', title=title, **attr)
+        return self.child(target, tag, title=title, **attr)
 
-    def item(self, label: str, href: str = '#', **attr):
+    @element()  # Leaf - no children
+    def item(self, target, tag, label: str = '', href: str = '#', **attr):
         """Create a menu item."""
-        return self.child('item', label=label, href=href, **attr)
+        return self.child(target, tag, label=label, href=href, value='', **attr)
 
 
 # Usage
-builder = MenuBuilder()
-nav = builder.menu('Main Navigation')
-nav.item('Home', '/')
-nav.item('Products', '/products')
+store = TreeStore(builder=MenuBuilder())
+nav = store.menu(title='Main Navigation')
+nav.item(label='Home', href='/')
+nav.item(label='Products', href='/products')
 
-more = nav.submenu('More')
-more.item('About', '/about')
-more.item('Contact', '/contact')
+more = nav.submenu(title='More')
+more.item(label='About', href='/about')
+more.item(label='Contact', href='/contact')
 ```
 
 ## Next Steps
 
-- Learn about [Validation](validation.md) with `@valid_children`
+- Learn about [Validation](validation.md) with cardinality constraints

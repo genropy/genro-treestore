@@ -6,16 +6,18 @@ genro-treestore provides a flexible path syntax for navigating hierarchical stru
 
 ### Label Access
 
-Access nodes by their auto-generated label:
+Access nodes by their label:
 
 ```python
+from genro_treestore import TreeStore
+
 store = TreeStore()
-div = store.child('div', id='main')
-span = div.child('span')
+div = store.set_item('div', id='main')
+span = div.set_item('span')
 
 # Access by label
-node = store['div_0']
-nested = store['div_0.span_0']
+node = store['div']
+nested = store['div.span']
 ```
 
 ### Positional Access
@@ -24,13 +26,13 @@ Use `#N` to access nodes by position (0-indexed):
 
 ```python
 store = TreeStore()
-store.child('div')  # #0
-store.child('span') # #1
-store.child('div')  # #2
+store.set_item('div')   # #0
+store.set_item('span')  # #1
+store.set_item('p')     # #2
 
-first = store['#0']   # First child (div_0)
-second = store['#1']  # Second child (span_0)
-last = store['#-1']   # Last child (div_1)
+first = store['#0']   # First child (div)
+second = store['#1']  # Second child (span)
+last = store['#-1']   # Last child (p)
 ```
 
 ## Dotted Paths
@@ -39,13 +41,13 @@ Chain multiple segments with dots for nested access:
 
 ```python
 # Label path
-store['div_0.ul_0.li_0']
+store['div.ul.li']
 
 # Positional path
 store['#0.#0.#0']
 
 # Mixed path
-store['div_0.#0.li_2']
+store['div.#0.li']
 ```
 
 ## Attribute Access
@@ -56,36 +58,28 @@ Use `?attr` to read or write node attributes:
 
 ```python
 store = TreeStore()
-store.child('div', color='red', size=10)
+store.set_item('div', color='red', size=10)
 
-color = store['div_0?color']  # 'red'
-size = store['div_0?size']    # 10
+color = store['div?color']  # 'red'
+size = store['div?size']    # 10
 ```
 
 ### Setting Attributes
 
 ```python
-store['div_0?color'] = 'blue'
-store['div_0?new_attr'] = 'value'
+store['div?color'] = 'blue'
+store['div?new_attr'] = 'value'
 ```
 
 ### Path + Attribute
 
 ```python
 # Access attribute on nested node
-value = store['div_0.span_0?class']
-store['div_0.span_0?class'] = 'highlight'
+value = store['div.span?class']
+store['div.span?class'] = 'highlight'
 ```
 
 ## Special Cases
-
-### Root Access
-
-Empty path returns the store itself:
-
-```python
-root = store['']  # Returns store
-```
 
 ### Non-existent Paths
 
@@ -113,22 +107,22 @@ except KeyError:
 store = TreeStore()
 
 # Build structure
-html = store.child('html')
-body = html.child('body')
-div = body.child('div', id='container')
-ul = div.child('ul', class_='list')
-ul.child('li', value='Item 1')
-ul.child('li', value='Item 2')
-ul.child('li', value='Item 3')
+html = store.set_item('html')
+body = html.set_item('body')
+div = body.set_item('div', id='container')
+ul = div.set_item('ul', class_='list')
+ul.set_item('li_0', value='Item 1')
+ul.set_item('li_1', value='Item 2')
+ul.set_item('li_2', value='Item 3')
 
 # Various access patterns
-store['html_0']                    # html node
-store['html_0.body_0']             # body node
-store['html_0.body_0.div_0']       # div node
+store['html']                      # html node
+store['html.body']                 # body node
+store['html.body.div']             # div node
 store['#0.#0.#0']                  # same as above
-store['html_0.body_0.div_0?id']    # 'container'
-store['#0.#0.#0.ul_0.#1']          # second li
-store['#0.#0.#0.ul_0.li_1'].value  # 'Item 2'
+store['html.body.div?id']          # 'container'
+store['#0.#0.#0.ul.#1']            # second li
+store['#0.#0.#0.ul.li_1']          # 'Item 2'
 ```
 
 ## Use Cases
@@ -137,24 +131,44 @@ store['#0.#0.#0.ul_0.li_1'].value  # 'Item 2'
 
 ```python
 config = TreeStore()
-db = config.child('database')
-db.child('host', value='localhost')
-db.child('port', value=5432)
+db = config.set_item('database')
+db.set_item('host', value='localhost')
+db.set_item('port', value=5432)
 
 # Access
-host = config['database_0.host_0'].value
-port = config['database_0.port_0'].value
+host = config['database.host']  # 'localhost'
+port = config['database.port']  # 5432
 ```
 
 ### DOM-like Structures
 
 ```python
 page = TreeStore()
-page.child('header', value='Welcome')
-main = page.child('main')
-main.child('article', id='post-1', value='Content...')
-page.child('footer', value='Copyright 2025')
+page.set_item('header', value='Welcome')
+main = page.set_item('main')
+main.set_item('article', id='post-1', value='Content...')
+page.set_item('footer', value='Copyright 2025')
 
 # Navigation
-article_id = page['main_0.article_0?id']
+article_id = page['main.article?id']
+```
+
+## With Builders
+
+When using builders, labels follow the `tag_N` pattern:
+
+```python
+from genro_treestore import TreeStore
+from genro_treestore.builders import HtmlBuilder
+
+store = TreeStore(builder=HtmlBuilder())
+div = store.div(id='main')
+div.span(value='Hello')
+div.span(value='World')
+
+# Access with auto-generated labels
+store['div_0']           # First div
+store['div_0.span_0']    # First span inside div
+store['div_0.span_1']    # Second span inside div
+store['div_0?id']        # 'main'
 ```

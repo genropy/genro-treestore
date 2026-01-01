@@ -97,13 +97,16 @@ Raised when a mandatory child element is missing during validation.
 
 ```python
 from genro_treestore import TreeStore, MissingChildError
-from genro_treestore.builders import BuilderBase, element, valid_children
+from genro_treestore.builders import BuilderBase, element
 
 class DocBuilder(BuilderBase):
-    @element
-    @valid_children('title[1]')  # title is required
-    def section(self, store, parent, **attrs):
-        pass
+    @element(children='title[1]')  # title is required
+    def section(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
+
+    @element()
+    def title(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
 
 store = TreeStore(builder=DocBuilder())
 sec = store.section()
@@ -124,17 +127,16 @@ Raised when adding a child would exceed the maximum cardinality.
 
 ```python
 from genro_treestore import TreeStore, TooManyChildrenError
-from genro_treestore.builders import BuilderBase, element, valid_children
+from genro_treestore.builders import BuilderBase, element
 
 class DocBuilder(BuilderBase):
-    @element
-    @valid_children('title[1]')  # exactly one title
-    def section(self, store, parent, **attrs):
-        pass
+    @element(children='title[1]')  # exactly one title
+    def section(self, target, tag, **attr):
+        return self.child(target, tag, **attr)
 
-    @element
-    def title(self, store, parent, value=None, **attrs):
-        pass
+    @element()
+    def title(self, target, tag, value=None, **attr):
+        return self.child(target, tag, value=value, **attr)
 
 store = TreeStore(builder=DocBuilder())
 sec = store.section()

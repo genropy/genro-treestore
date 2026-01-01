@@ -18,11 +18,11 @@ graph LR
 
     TS -->|to_tytx()| TYTX
     TS -->|to_xml()| XML
-    TS -->|to_dict()| DICT
+    TS -->|as_dict()| DICT
 
     TYTX -->|from_tytx()| TS
     XML -->|from_xml()| TS
-    DICT -->|from_dict()| TS
+    DICT -->|TreeStore(source=dict)| TS
 ```
 
 ## TYTX Format
@@ -95,26 +95,25 @@ from_msgpack = TreeStore.from_tytx(binary_data, transport='msgpack')
 
 ### TYTX Structure
 
-The TYTX format stores type information alongside values:
+The TYTX format uses a flat row-based structure for efficient serialization:
 
 ```json
 {
-  "nodes": {
-    "invoice": {
-      "nodes": {
-        "amount": {
-          "value": "1234.56",
-          "type": "decimal"
-        },
-        "date": {
-          "value": "2025-01-15",
-          "type": "date"
-        }
-      }
-    }
-  }
+  "rows": [
+    ["", "invoice", null, null, {}],
+    ["invoice", "amount", null, {"_t": "D", "v": "1234.56"}, {}],
+    ["invoice", "date", null, {"_t": "d", "v": "2025-01-15"}, {}]
+  ]
 }
 ```
+
+Each row is a tuple: `[parent_path, label, tag, value, attributes]`
+
+- `parent_path`: Path to parent node (empty string for root children)
+- `label`: Node's unique key within its parent
+- `tag`: Node type from builder (null if no builder)
+- `value`: Node value with type metadata, or null for branches
+- `attributes`: Dict of node attributes
 
 ## XML Serialization
 
@@ -175,11 +174,11 @@ store.set_item('config.host', 'localhost')
 store.set_item('config.port', 5432)
 
 # To dictionary
-data = store.to_dict()
+data = store.as_dict()
 # {'config': {'host': 'localhost', 'port': 5432}}
 
-# From dictionary
-restored = TreeStore.from_dict(data)
+# From dictionary (pass to constructor)
+restored = TreeStore(source=data)
 ```
 
 ## Serialization Comparison
