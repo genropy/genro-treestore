@@ -9,6 +9,9 @@ from typing import Any, Callable, Iterator
 
 from .node import TreeStoreNode
 
+# Type alias for subscriber callbacks
+SubscriberCallback = Callable[..., None]
+
 
 class TreeStore:
     """A hierarchical data container with O(1) lookup.
@@ -28,7 +31,10 @@ class TreeStore:
         'red'
     """
 
-    __slots__ = ('_nodes', '_order', 'parent', '_builder')
+    __slots__ = (
+        '_nodes', '_order', 'parent', '_builder',
+        '_upd_subscribers', '_ins_subscribers', '_del_subscribers',
+    )
 
     def __init__(
         self,
@@ -59,6 +65,9 @@ class TreeStore:
         self._order: list[TreeStoreNode] = []
         self.parent = parent
         self._builder = builder
+        self._upd_subscribers: dict[str, SubscriberCallback] = {}
+        self._ins_subscribers: dict[str, SubscriberCallback] = {}
+        self._del_subscribers: dict[str, SubscriberCallback] = {}
 
         if source is not None:
             self._load_source(source)
@@ -110,15 +119,15 @@ class TreeStore:
                     node = TreeStoreNode(key, attr, value=child_store, parent=self)
                     child_store.parent = node
                     child_store._load_from_dict(children)
-                    self._insert_node(node)
+                    self._insert_node(node, trigger=False)
                 else:
                     # Leaf node (only _value and attributes)
                     node = TreeStoreNode(key, attr, value=node_value, parent=self)
-                    self._insert_node(node)
+                    self._insert_node(node, trigger=False)
             else:
                 # Simple value
                 node = TreeStoreNode(key, {}, value=value, parent=self)
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
 
     def _load_from_treestore(self, source: TreeStore) -> None:
         """Copy data from another TreeStore."""
@@ -134,7 +143,7 @@ class TreeStore:
                 )
                 child_store.parent = node
                 child_store._load_from_treestore(src_node.value)
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
             else:
                 # Copy leaf
                 node = TreeStoreNode(
@@ -143,7 +152,7 @@ class TreeStore:
                     value=src_node.value,
                     parent=self,
                 )
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
 
     def _load_from_list(self, items: list) -> None:
         """Load data from a list of tuples.
@@ -171,18 +180,18 @@ class TreeStore:
                 node = TreeStoreNode(label, attr, value=child_store, parent=self)
                 child_store.parent = node
                 child_store._load_from_dict(value)
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
             elif isinstance(value, list) and value and isinstance(value[0], tuple):
                 # Nested list of tuples becomes branch
                 child_store = TreeStore(builder=self._builder)
                 node = TreeStoreNode(label, attr, value=child_store, parent=self)
                 child_store.parent = node
                 child_store._load_from_list(value)
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
             else:
                 # Simple value
                 node = TreeStoreNode(label, attr, value=value, parent=self)
-                self._insert_node(node)
+                self._insert_node(node, trigger=False)
 
     def __repr__(self) -> str:
         return f"TreeStore({list(self._nodes.keys())})"
@@ -269,7 +278,13 @@ class TreeStore:
                 return i
         raise KeyError(f"Label '{label}' not found")
 
-    def _insert_node(self, node: TreeStoreNode, position: str | None = None) -> None:
+    def _insert_node(
+        self,
+        node: TreeStoreNode,
+        position: str | None = None,
+        trigger: bool = True,
+        reason: str | None = None,
+    ) -> None:
         """Insert a node into both _nodes dict and _order list.
 
         Args:
@@ -282,12 +297,16 @@ class TreeStore:
                 - '<#N': insert before position N
                 - '>#N': insert after position N
                 - '#N': insert at exact position N
+            trigger: If True, notify subscribers of the insertion.
+            reason: Optional reason string for the trigger.
         """
         self._nodes[node.label] = node
 
         if position is None or position == '>':
+            idx = len(self._order)
             self._order.append(node)
         elif position == '<':
+            idx = 0
             self._order.insert(0, node)
         elif position.startswith('<#'):
             idx = int(position[2:])
@@ -314,19 +333,35 @@ class TreeStore:
             self._order.insert(idx, node)
         else:
             # Unknown position, append to end
+            idx = len(self._order)
             self._order.append(node)
 
-    def _remove_node(self, label: str) -> TreeStoreNode:
+        if trigger:
+            self._on_node_inserted(node, idx, reason=reason)
+
+    def _remove_node(
+        self,
+        label: str,
+        trigger: bool = True,
+        reason: str | None = None,
+    ) -> TreeStoreNode:
         """Remove a node from both _nodes dict and _order list.
 
         Args:
             label: The label of the node to remove.
+            trigger: If True, notify subscribers of the deletion.
+            reason: Optional reason string for the trigger.
 
         Returns:
             The removed node.
         """
         node = self._nodes.pop(label)
+        idx = self._order.index(node)
         self._order.remove(node)
+
+        if trigger:
+            self._on_node_deleted(node, idx, reason=reason)
+
         return node
 
     def _htraverse(
@@ -793,6 +828,159 @@ class TreeStore:
     def parent_node(self) -> TreeStoreNode | None:
         """Get the parent node (alias for self.parent)."""
         return self.parent
+
+    # ==================== Triggers ====================
+
+    def subscribe(
+        self,
+        subscriber_id: str,
+        update: SubscriberCallback | None = None,
+        insert: SubscriberCallback | None = None,
+        delete: SubscriberCallback | None = None,
+        any: SubscriberCallback | None = None,
+    ) -> None:
+        """Subscribe to change events on this store.
+
+        Events propagate up the hierarchy: a subscriber on the root
+        receives events from all descendants, with the path indicating
+        where the change occurred.
+
+        Args:
+            subscriber_id: Unique identifier for this subscription.
+            update: Callback for value/attribute changes.
+            insert: Callback for node insertions.
+            delete: Callback for node deletions.
+            any: Callback for all events (shorthand for update+insert+delete).
+
+        Callback signature:
+            callback(node, path, evt, oldvalue=None, reason=None)
+            - node: The affected TreeStoreNode
+            - path: Dot-separated path from this store to the node
+            - evt: Event type ('upd_value', 'upd_attr', 'ins', 'del')
+            - oldvalue: Previous value (for updates)
+            - reason: Optional reason string (to detect self-triggered events)
+
+        Example:
+            >>> def on_change(node, path, evt, **kw):
+            ...     print(f"{evt} at {path}")
+            >>> store.subscribe('renderer', any=on_change)
+        """
+        if update or any:
+            self._upd_subscribers[subscriber_id] = update or any
+        if insert or any:
+            self._ins_subscribers[subscriber_id] = insert or any
+        if delete or any:
+            self._del_subscribers[subscriber_id] = delete or any
+
+    def unsubscribe(
+        self,
+        subscriber_id: str,
+        update: bool = False,
+        insert: bool = False,
+        delete: bool = False,
+        any: bool = False,
+    ) -> None:
+        """Unsubscribe from change events.
+
+        Args:
+            subscriber_id: The subscription identifier to remove.
+            update: Unsubscribe from update events.
+            insert: Unsubscribe from insert events.
+            delete: Unsubscribe from delete events.
+            any: Unsubscribe from all events.
+        """
+        if update or any:
+            self._upd_subscribers.pop(subscriber_id, None)
+        if insert or any:
+            self._ins_subscribers.pop(subscriber_id, None)
+        if delete or any:
+            self._del_subscribers.pop(subscriber_id, None)
+
+    def _on_node_changed(
+        self,
+        node: TreeStoreNode,
+        pathlist: list[str],
+        evt: str,
+        oldvalue: Any = None,
+        reason: str | None = None,
+    ) -> None:
+        """Notify subscribers of a node change and propagate to parent.
+
+        Args:
+            node: The node that changed.
+            pathlist: Path components from this store to the node.
+            evt: Event type ('upd_value' or 'upd_attr').
+            oldvalue: Previous value.
+            reason: Optional reason string.
+        """
+        path = '.'.join(pathlist)
+        for callback in self._upd_subscribers.values():
+            callback(node=node, path=path, evt=evt, oldvalue=oldvalue, reason=reason)
+
+        if self.parent is not None:
+            parent_store = self.parent.parent
+            if parent_store is not None:
+                parent_store._on_node_changed(
+                    node, [self.parent.label] + pathlist, evt, oldvalue, reason
+                )
+
+    def _on_node_inserted(
+        self,
+        node: TreeStoreNode,
+        index: int,
+        pathlist: list[str] | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Notify subscribers of a node insertion and propagate to parent.
+
+        Args:
+            node: The inserted node.
+            index: Position where node was inserted.
+            pathlist: Path components from this store to the node.
+            reason: Optional reason string.
+        """
+        if pathlist is None:
+            pathlist = []
+        path = '.'.join(pathlist) if pathlist else node.label
+
+        for callback in self._ins_subscribers.values():
+            callback(node=node, path=path, index=index, evt='ins', reason=reason)
+
+        if self.parent is not None:
+            parent_store = self.parent.parent
+            if parent_store is not None:
+                parent_store._on_node_inserted(
+                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
+                )
+
+    def _on_node_deleted(
+        self,
+        node: TreeStoreNode,
+        index: int,
+        pathlist: list[str] | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Notify subscribers of a node deletion and propagate to parent.
+
+        Args:
+            node: The deleted node.
+            index: Position where node was removed from.
+            pathlist: Path components from this store to the node.
+            reason: Optional reason string.
+        """
+        if pathlist is None:
+            pathlist = []
+        path = '.'.join(pathlist) if pathlist else node.label
+
+        for callback in self._del_subscribers.values():
+            callback(node=node, path=path, index=index, evt='del', reason=reason)
+
+        if self.parent is not None:
+            parent_store = self.parent.parent
+            if parent_store is not None:
+                parent_store._on_node_deleted(
+                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
+                )
 
     # ==================== Conversion ====================
 
