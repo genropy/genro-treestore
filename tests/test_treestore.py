@@ -1030,17 +1030,19 @@ class TestTreeStoreCoreEdgeCases:
             _ = store.unknown
 
     def test_get_node_by_position_out_of_range(self):
-        """Test _get_node_by_position raises for out of range index."""
+        """Test _get_node_by_position returns None for out of range index."""
         store = TreeStore()
         store.set_item("a", 1)
-        with pytest.raises(KeyError, match="Position #5 out of range"):
+        # get_node returns None for out of range
+        assert store.get_node("#5") is None
+        # __getitem__ raises KeyError
+        with pytest.raises(KeyError):
             store["#5"]
 
-    def test_get_node_empty_path_raises(self):
-        """Test get_node raises for empty path."""
+    def test_get_node_empty_path_returns_none(self):
+        """Test get_node returns None for empty path."""
         store = TreeStore()
-        with pytest.raises(KeyError, match="Empty path"):
-            store.get_node("")
+        assert store.get_node("") is None
 
     def test_insert_node_unknown_position_appends(self):
         """Test _insert_node with unknown position falls back to append."""
@@ -1085,11 +1087,14 @@ class TestTreeStoreCoreEdgeCases:
         with pytest.raises(KeyError, match="Cannot autocreate with positional"):
             store._htraverse("#0.child", autocreate=True)
 
-    def test_htraverse_leaf_in_path_raises(self):
-        """Test _htraverse raises when encountering leaf in middle of path."""
+    def test_htraverse_leaf_in_path_returns_none(self):
+        """Test get_node returns None when encountering leaf in middle of path."""
         store = TreeStore()
         store.set_item("leaf", "value")  # This is a leaf
-        with pytest.raises(KeyError, match="is a leaf"):
+        # get_node returns None for path through leaf
+        assert store.get_node("leaf.child") is None
+        # __getitem__ raises KeyError
+        with pytest.raises(KeyError):
             store["leaf.child"]
 
     def test_htraverse_leaf_to_branch_autocreate(self):

@@ -24,7 +24,7 @@ Resolver System:
 Schema Builders:
     Build TreeStore hierarchies from external schema definitions:
 
-    - **RncBuilder**: From RELAX NG Compact (.rnc) schema files
+    - **HtmlBuilder**: HTML5 elements with W3C schema validation
     - **XsdBuilder**: From XML Schema (.xsd) files
 
 Example:
@@ -65,25 +65,6 @@ Example:
         store = TreeStore(builder=HtmlBuilder())
         body = store.body()
         body.div(id='main').p(value='Hello World!')
-
-    From RNC schema::
-
-        from genro_treestore import TreeStore, parse_rnc
-        from genro_treestore.builders import RncBuilder
-
-        builder = RncBuilder.from_rnc('''
-            start = document
-            document = element doc { section+ }
-            section = element section { title, para* }
-            title = element title { text }
-            para = element para { text }
-        ''')
-
-        store = TreeStore(builder=builder)
-        doc = store.doc()
-        sec = doc.section()
-        sec.title(value='Introduction')
-        sec.para(value='Welcome to TreeStore.')
 """
 
 __version__ = "0.2.0"
@@ -98,7 +79,6 @@ from .builders import (
     element,
     valid_children,
 )
-from .builders.rnc import parse_rnc, parse_rnc_file
 from .exceptions import (
     InvalidChildError,
     InvalidParentError,
@@ -145,7 +125,4 @@ __all__ = [
     "MissingChildError",
     "TooManyChildrenError",
     "InvalidParentError",
-    # Parsers
-    "parse_rnc",
-    "parse_rnc_file",
 ]

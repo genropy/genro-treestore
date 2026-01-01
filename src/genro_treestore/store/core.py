@@ -183,11 +183,7 @@ class TreeStore(SubscriptionMixin):
         """
         if "." not in label:
             return label in self._nodes
-        try:
-            self.get_node(label)
-            return True
-        except KeyError:
-            return False
+        return self.get_node(label) is not None
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attribute access to builder if present.
@@ -527,6 +523,9 @@ class TreeStore(SubscriptionMixin):
 
             node = self.get_node(path)
 
+            if node is None:
+                return default
+
             if attr_name is not None:
                 return node.attr.get(attr_name, default)
 
@@ -558,6 +557,9 @@ class TreeStore(SubscriptionMixin):
 
         node = self.get_node(path)
 
+        if node is None:
+            raise KeyError(path)
+
         if attr_name is not None:
             return node.attr.get(attr_name)
 
@@ -583,32 +585,32 @@ class TreeStore(SubscriptionMixin):
             # Set value (with autocreate)
             self.set_item(path, value)
 
-    def get_node(self, path: str) -> TreeStoreNode:
+    def get_node(self, path: str) -> TreeStoreNode | None:
         """Get node at the given path.
 
         Args:
             path: Dotted path to the node.
 
         Returns:
-            TreeStoreNode at the path.
-
-        Raises:
-            KeyError: If path not found.
+            TreeStoreNode at the path, or None if not found.
         """
         if not path:
-            raise KeyError("Empty path")
+            return None
 
-        if "." not in path:
-            is_pos, key = self._parse_path_segment(path)
+        try:
+            if "." not in path:
+                is_pos, key = self._parse_path_segment(path)
+                if is_pos:
+                    return self._get_node_by_position(key)
+                return self._nodes.get(path)
+
+            parent_store, label = self._htraverse(path, autocreate=False)
+            is_pos, key = self._parse_path_segment(label)
             if is_pos:
-                return self._get_node_by_position(key)
-            return self._nodes[path]
-
-        parent_store, label = self._htraverse(path, autocreate=False)
-        is_pos, key = self._parse_path_segment(label)
-        if is_pos:
-            return parent_store._get_node_by_position(key)
-        return parent_store._nodes[label]
+                return parent_store._get_node_by_position(key)
+            return parent_store._nodes.get(label)
+        except (KeyError, IndexError):
+            return None
 
     def get_attr(self, path: str, attr: str | None = None, default: Any = None) -> Any:
         """Get attribute(s) from node at path.
@@ -623,6 +625,8 @@ class TreeStore(SubscriptionMixin):
         """
         try:
             node = self.get_node(path)
+            if node is None:
+                return default
             return node.get_attr(attr, default)
         except KeyError:
             return default

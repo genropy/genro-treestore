@@ -63,7 +63,7 @@ graph TB
 | **Builder Pattern** | Fluent APIs with auto-labeling and validation |
 | **Reactive Subscriptions** | Event propagation for insert/update/delete |
 | **Lazy Resolvers** | Dynamic value computation with TTL caching |
-| **Schema Builders** | Generate builders from RNC or XSD schemas |
+| **Schema Builders** | HtmlBuilder with W3C validation, XsdBuilder for XML Schema |
 | **Type-Safe Serialization** | TYTX format preserves Decimal, date, datetime |
 
 ## Quick Example
@@ -112,7 +112,6 @@ graph TB
         subgraph "builders/"
             BASE[base.py<br/>BuilderBase]
             HTML[html.py<br/>HtmlBuilder]
-            RNC[rnc/<br/>RncBuilder]
             XSD[xsd/<br/>XsdBuilder]
         end
 

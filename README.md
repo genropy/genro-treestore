@@ -52,7 +52,7 @@ pip install genro-treestore
 | **Builder Pattern** | Fluent APIs with auto-labeling and validation |
 | **Reactive Subscriptions** | Event propagation for insert/update/delete |
 | **Lazy Resolvers** | Dynamic value computation with TTL caching |
-| **Schema Builders** | Generate builders from RNC or XSD schemas |
+| **Schema Builders** | HtmlBuilder with W3C validation, XsdBuilder for XML Schema |
 | **Type-Safe Serialization** | TYTX format preserves Decimal, date, datetime |
 
 ## Quick Start
@@ -126,27 +126,6 @@ print(store['body_0.div_0?id'])    # 'main'
 ```
 
 ### Dynamic Builders from Schemas
-
-#### From RNC (RELAX NG Compact)
-
-```python
-from genro_treestore import TreeStore
-from genro_treestore.builders import RncBuilder
-
-builder = RncBuilder.from_rnc('''
-    start = document
-    document = element doc { section+ }
-    section = element section { title, para* }
-    title = element title { text }
-    para = element para { text }
-''')
-
-store = TreeStore(builder=builder)
-doc = store.doc()
-sec = doc.section()
-sec.title(value='Introduction')
-sec.para(value='Welcome to TreeStore.')
-```
 
 #### From XSD (XML Schema)
 
@@ -386,7 +365,6 @@ graph TB
         subgraph "builders/"
             BASE[base.py<br/>BuilderBase]
             HTML[html.py<br/>HtmlBuilder]
-            RNC[rnc/<br/>RncBuilder]
             XSD[xsd/<br/>XsdBuilder]
         end
 
@@ -406,7 +384,6 @@ graph TB
     CORE --> SUB
     CORE --> SER
     BASE --> HTML
-    BASE --> RNC
     BASE --> XSD
 ```
 

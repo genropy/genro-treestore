@@ -31,14 +31,12 @@ graph TB
         end
 
         subgraph "Schema"
-            RNC[rnc/<br/>RncBuilder]
             XSD[xsd/<br/>XsdBuilder]
         end
 
         INIT --> STORE
         INIT --> BUILD
         INIT --> RES
-        BUILD --> RNC
         BUILD --> XSD
     end
 ```
@@ -48,7 +46,7 @@ graph TB
 | Module | Description |
 |--------|-------------|
 | `store` | Core TreeStore and TreeStoreNode classes |
-| `builders` | BuilderBase and typed builders (HTML, RNC, XSD) |
+| `builders` | BuilderBase and typed builders (HTML, XSD) |
 | `resolvers` | Lazy value resolution (Callback, Directory, TxtDoc) |
 | `exceptions` | Custom exception hierarchy |
 
@@ -84,10 +82,6 @@ from genro_treestore import (
     InvalidParentError,
     MissingChildError,
     TooManyChildrenError,
-
-    # Parsers
-    parse_rnc,
-    parse_rnc_file,
 )
 ```
 

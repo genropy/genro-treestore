@@ -11,17 +11,11 @@ graph TB
         DEC[decorators.py<br/>@element]
         HTML[html.py<br/>HtmlBuilder]
 
-        subgraph "rnc/"
-            RNC[RncBuilder]
-            LAZY[LazyRncBuilder]
-        end
-
         subgraph "xsd/"
             XSD[XsdBuilder]
         end
 
         BASE --> HTML
-        BASE --> RNC
         BASE --> XSD
         DEC --> BASE
     end
@@ -75,38 +69,6 @@ graph TB
     FLOW --> INTERACTIVE
 ```
 
-## RncBuilder
-
-Dynamic builder from RELAX NG Compact schemas.
-
-```{eval-rst}
-.. autoclass:: genro_treestore.builders.RncBuilder
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-### Example
-
-```python
-from genro_treestore import TreeStore
-from genro_treestore.builders import RncBuilder
-
-builder = RncBuilder.from_rnc('''
-    start = document
-    document = element doc { section+ }
-    section = element section { title, para* }
-    title = element title { text }
-    para = element para { text }
-''')
-
-store = TreeStore(builder=builder)
-doc = store.doc()
-sec = doc.section()
-sec.title(value='Introduction')
-sec.para(value='Welcome.')
-```
-
 ## XsdBuilder
 
 Dynamic builder from XML Schema (XSD) files.
@@ -153,17 +115,11 @@ classDiagram
         ...
     }
 
-    class RncBuilder {
-        +from_rnc(content)
-        +from_rnc_file(path)
-    }
-
     class XsdBuilder {
         +__init__(schema)
     }
 
     BuilderBase <|-- HtmlBuilder
-    BuilderBase <|-- RncBuilder
     BuilderBase <|-- XsdBuilder
 ```
 

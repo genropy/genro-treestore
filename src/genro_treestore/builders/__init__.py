@@ -10,7 +10,6 @@ rules, validate attributes, and ensure well-formed output.
 Builder Types:
     - **BuilderBase**: Abstract base class for custom builders
     - **HtmlBuilder**: HTML5 document builder with element validation
-    - **RncBuilder**: Dynamic builder from RELAX NG Compact schemas
     - **XsdBuilder**: Dynamic builder from XML Schema (XSD) files
 
 Decorators:
@@ -32,17 +31,6 @@ Creating Custom Builders:
             def item(self, store, parent, value=None, **attrs):
                 pass
 
-Dynamic Schema Builders:
-    Load structure from external schema files::
-
-        from genro_treestore.builders import RncBuilder, XsdBuilder
-
-        # From RELAX NG Compact
-        html_builder = RncBuilder.from_rnc_file('html5.rnc')
-
-        # From XML Schema
-        invoice_builder = XsdBuilder(TreeStore.from_xml(xsd_content))
-
 Example:
     Using HtmlBuilder for type-safe HTML generation::
 
@@ -58,14 +46,12 @@ Example:
 See Also:
     - :mod:`genro_treestore.builders.base` - BuilderBase implementation
     - :mod:`genro_treestore.builders.html` - HTML5 builder
-    - :mod:`genro_treestore.builders.rnc` - RNC schema builder
     - :mod:`genro_treestore.builders.xsd` - XSD schema builder
 """
 
 from .base import BuilderBase
 from .decorators import element, valid_children
 from .html import HtmlBuilder, HtmlHeadBuilder, HtmlBodyBuilder, HtmlPage
-from .rnc import RncBuilder, LazyRncBuilder
 from .xsd import XsdBuilder
 
 __all__ = [
@@ -76,7 +62,5 @@ __all__ = [
     "HtmlHeadBuilder",
     "HtmlBodyBuilder",
     "HtmlPage",
-    "RncBuilder",
-    "LazyRncBuilder",
     "XsdBuilder",
 ]

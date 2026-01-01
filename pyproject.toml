@@ -59,7 +59,6 @@ pythonpath = ["src"]
 source = ["src/genro_treestore"]
 branch = true
 omit = [
-    "src/genro_treestore/builders/rnc/*",
     "src/genro_treestore/builders/xsd/*",
 ]
 

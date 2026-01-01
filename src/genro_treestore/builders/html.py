@@ -1,26 +1,11 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""HtmlBuilder - HTML5 element builder with content model validation.
+"""HtmlBuilder - HTML5 element builder with W3C schema validation.
 
-This module provides builders for generating HTML5 documents with
-structural validation based on the WHATWG HTML Living Standard.
-
-Content Categories:
-    HTML5 defines several content categories that determine where
-    elements can appear and what they can contain:
-
-    - **Metadata content**: Elements for document metadata (head section)
-    - **Flow content**: Most elements that can appear in body
-    - **Phrasing content**: Text-level semantics (inline elements)
-    - **Heading content**: Section headings (h1-h6, hgroup)
-    - **Sectioning content**: Document outline elements
-    - **Embedded content**: External resources (img, video, etc.)
-    - **Interactive content**: User interaction elements
-
-References:
-    - WHATWG HTML Standard: https://html.spec.whatwg.org/
-    - Content categories: https://html.spec.whatwg.org/dev/dom.html
+This module provides builders for generating HTML5 documents. The schema
+is loaded from a pre-compiled MessagePack file generated from W3C Validator
+RELAX NG schema files.
 
 Example:
     Creating an HTML document::
@@ -36,10 +21,15 @@ Example:
         ul = div.ul()
         ul.li(value='Item 1')
         ul.li(value='Item 2')
+
+References:
+    - W3C Validator: https://github.com/validator/validator
+    - WHATWG HTML Standard: https://html.spec.whatwg.org/
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from .base import BuilderBase
@@ -49,328 +39,80 @@ if TYPE_CHECKING:
     from ..store import TreeStoreNode
 
 
-# =============================================================================
-# HTML5 Content Categories
-# Based on WHATWG HTML Standard: https://html.spec.whatwg.org/dev/dom.html
-# =============================================================================
+# Cache for loaded schema
+_schema_cache: dict | None = None
 
-# Void elements - self-closing, cannot have children or text content
-VOID_ELEMENTS = frozenset(
-    {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "source",
-        "track",
-        "wbr",
+
+def _load_html5_schema() -> dict:
+    """Load HTML5 schema from pre-compiled MessagePack.
+
+    Returns:
+        Dict with 'elements' (set) and 'void_elements' (set).
+    """
+    global _schema_cache
+
+    if _schema_cache is not None:
+        return _schema_cache
+
+    from ..store import TreeStore
+
+    schema_file = Path(__file__).parent / "schemas" / "html5_schema.msgpack"
+
+    if not schema_file.exists():
+        raise FileNotFoundError(
+            f"HTML5 schema not found: {schema_file}\n"
+            "Run: python scripts/build_html5_schema.py"
+        )
+
+    schema_store = TreeStore.from_tytx(
+        schema_file.read_bytes(),
+        transport="msgpack",
+    )
+
+    # Extract element lists
+    elements_node = schema_store.get_node("_elements")
+    void_node = schema_store.get_node("_void_elements")
+
+    _schema_cache = {
+        "elements": frozenset(elements_node.value) if elements_node else frozenset(),
+        "void_elements": frozenset(void_node.value) if void_node else frozenset(),
     }
-)
 
-# Metadata content - elements for document metadata (in <head>)
-METADATA_CONTENT = frozenset(
-    {"base", "link", "meta", "noscript", "script", "style", "template", "title"}
-)
-
-# Flow content - most elements allowed in <body>
-# This is the largest category, containing block and inline elements
-FLOW_CONTENT = frozenset(
-    {
-        "a",
-        "abbr",
-        "address",
-        "article",
-        "aside",
-        "audio",
-        "b",
-        "bdi",
-        "bdo",
-        "blockquote",
-        "br",
-        "button",
-        "canvas",
-        "cite",
-        "code",
-        "data",
-        "datalist",
-        "del",
-        "details",
-        "dfn",
-        "dialog",
-        "div",
-        "dl",
-        "em",
-        "embed",
-        "fieldset",
-        "figure",
-        "footer",
-        "form",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "header",
-        "hgroup",
-        "hr",
-        "i",
-        "iframe",
-        "img",
-        "input",
-        "ins",
-        "kbd",
-        "label",
-        "main",
-        "map",
-        "mark",
-        "math",
-        "menu",
-        "meter",
-        "nav",
-        "noscript",
-        "object",
-        "ol",
-        "output",
-        "p",
-        "picture",
-        "pre",
-        "progress",
-        "q",
-        "ruby",
-        "s",
-        "samp",
-        "script",
-        "search",
-        "section",
-        "select",
-        "slot",
-        "small",
-        "span",
-        "strong",
-        "sub",
-        "sup",
-        "svg",
-        "table",
-        "template",
-        "textarea",
-        "time",
-        "u",
-        "ul",
-        "var",
-        "video",
-        "wbr",
-    }
-)
-
-# Phrasing content - text-level semantics (roughly: inline elements)
-PHRASING_CONTENT = frozenset(
-    {
-        "a",
-        "abbr",
-        "audio",
-        "b",
-        "bdi",
-        "bdo",
-        "br",
-        "button",
-        "canvas",
-        "cite",
-        "code",
-        "data",
-        "datalist",
-        "del",
-        "dfn",
-        "em",
-        "embed",
-        "i",
-        "iframe",
-        "img",
-        "input",
-        "ins",
-        "kbd",
-        "label",
-        "map",
-        "mark",
-        "math",
-        "meter",
-        "noscript",
-        "object",
-        "output",
-        "picture",
-        "progress",
-        "q",
-        "ruby",
-        "s",
-        "samp",
-        "script",
-        "select",
-        "slot",
-        "small",
-        "span",
-        "strong",
-        "sub",
-        "sup",
-        "svg",
-        "template",
-        "textarea",
-        "time",
-        "u",
-        "var",
-        "video",
-        "wbr",
-    }
-)
-
-# Heading content - section headings
-HEADING_CONTENT = frozenset({"h1", "h2", "h3", "h4", "h5", "h6", "hgroup"})
-
-# Sectioning content - elements that define document outline
-SECTIONING_CONTENT = frozenset({"article", "aside", "nav", "section"})
-
-# Embedded content - external resources
-EMBEDDED_CONTENT = frozenset(
-    {
-        "audio",
-        "canvas",
-        "embed",
-        "iframe",
-        "img",
-        "math",
-        "object",
-        "picture",
-        "svg",
-        "video",
-    }
-)
-
-# Interactive content - elements for user interaction
-INTERACTIVE_CONTENT = frozenset(
-    {
-        "a",
-        "audio",
-        "button",
-        "details",
-        "embed",
-        "iframe",
-        "img",
-        "input",
-        "label",
-        "select",
-        "textarea",
-        "video",
-    }
-)
-
-# =============================================================================
-# Element-specific child constraints
-# Maps parent elements to their allowed children
-# =============================================================================
-
-ELEMENT_CHILDREN = {
-    # Document structure
-    "html": {"head", "body"},
-    "head": METADATA_CONTENT,
-    "body": FLOW_CONTENT,
-    # Lists
-    "ul": {"li"},
-    "ol": {"li"},
-    "dl": {"dt", "dd", "div"},
-    "menu": {"li"},
-    # Tables
-    "table": {"caption", "colgroup", "thead", "tbody", "tfoot", "tr"},
-    "thead": {"tr"},
-    "tbody": {"tr"},
-    "tfoot": {"tr"},
-    "tr": {"th", "td"},
-    "colgroup": {"col"},
-    # Forms
-    "select": {"option", "optgroup"},
-    "optgroup": {"option"},
-    "datalist": {"option"},
-    "fieldset": {"legend"} | FLOW_CONTENT,
-    # Grouping with special first child
-    "figure": {"figcaption"} | FLOW_CONTENT,
-    "details": {"summary"} | FLOW_CONTENT,
-    # Media
-    "picture": {"source", "img"},
-    "audio": {"source", "track"} | FLOW_CONTENT,
-    "video": {"source", "track"} | FLOW_CONTENT,
-    # Other
-    "map": {"area"} | FLOW_CONTENT,
-    "ruby": {"rt", "rp"} | PHRASING_CONTENT,
-}
-
-# All known HTML5 tags (union of all categories plus structural elements)
-ALL_TAGS = (
-    METADATA_CONTENT
-    | FLOW_CONTENT
-    | VOID_ELEMENTS
-    | {
-        "html",
-        "head",
-        "body",
-        "li",
-        "dt",
-        "dd",
-        "caption",
-        "colgroup",
-        "col",
-        "thead",
-        "tbody",
-        "tfoot",
-        "tr",
-        "th",
-        "td",
-        "option",
-        "optgroup",
-        "legend",
-        "figcaption",
-        "summary",
-        "source",
-        "track",
-        "area",
-        "rt",
-        "rp",
-    }
-)
+    return _schema_cache
 
 
 class HtmlBuilder(BuilderBase):
-    """Builder for HTML elements.
+    """Builder for HTML5 elements.
 
-    Provides dynamic methods for all HTML tags via __getattr__.
+    Provides dynamic methods for all 112 HTML5 tags via __getattr__.
     Void elements (meta, br, img, etc.) automatically use empty string value.
+
+    The schema is loaded from a pre-compiled MessagePack file generated
+    from W3C Validator RELAX NG schema files.
 
     Usage:
         >>> store = TreeStore(builder=HtmlBuilder())
         >>> store.div(id='main').p(value='Hello')
         >>> store.ul().li(value='Item 1')
 
-    Categories available as class attributes for reference:
-        - VOID_ELEMENTS
-        - FLOW_CONTENT
-        - PHRASING_CONTENT
-        - etc.
+    Attributes:
+        VOID_ELEMENTS: Set of void (self-closing) element names.
+        ALL_TAGS: Set of all valid HTML5 element names.
     """
 
-    # Expose categories as class attributes
-    VOID_ELEMENTS = VOID_ELEMENTS
-    METADATA_CONTENT = METADATA_CONTENT
-    FLOW_CONTENT = FLOW_CONTENT
-    PHRASING_CONTENT = PHRASING_CONTENT
-    HEADING_CONTENT = HEADING_CONTENT
-    SECTIONING_CONTENT = SECTIONING_CONTENT
-    EMBEDDED_CONTENT = EMBEDDED_CONTENT
-    INTERACTIVE_CONTENT = INTERACTIVE_CONTENT
-    ELEMENT_CHILDREN = ELEMENT_CHILDREN
-    ALL_TAGS = ALL_TAGS
+    def __init__(self):
+        """Initialize HtmlBuilder with W3C HTML5 schema."""
+        self._schema_data = _load_html5_schema()
+
+    @property
+    def VOID_ELEMENTS(self) -> frozenset[str]:
+        """Void elements (self-closing, no content)."""
+        return self._schema_data["void_elements"]
+
+    @property
+    def ALL_TAGS(self) -> frozenset[str]:
+        """All valid HTML5 element names."""
+        return self._schema_data["elements"]
 
     def __getattr__(self, name: str) -> Callable[..., TreeStore | TreeStoreNode]:
         """Dynamic method for any HTML tag.
@@ -387,14 +129,14 @@ class HtmlBuilder(BuilderBase):
         if name.startswith("_"):
             raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
-        if name in ALL_TAGS:
+        if name in self._schema_data["elements"]:
             return self._make_tag_method(name)
 
         raise AttributeError(f"'{name}' is not a valid HTML tag")
 
     def _make_tag_method(self, name: str) -> Callable[..., TreeStore | TreeStoreNode]:
         """Create a method for a specific tag."""
-        is_void = name in VOID_ELEMENTS
+        is_void = name in self._schema_data["void_elements"]
 
         def tag_method(
             target: TreeStore, tag: str = name, value: Any = None, **attr: Any
@@ -455,7 +197,9 @@ class HtmlPage:
     def _node_to_html(self, node: TreeStoreNode, indent: int = 0) -> str:
         """Recursively convert a node to HTML."""
         tag = node.tag or node.label
-        attrs = " ".join(f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_"))
+        attrs = " ".join(
+            f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_")
+        )
         attrs_str = f" {attrs}" if attrs else ""
         spaces = "  " * indent
 
@@ -489,8 +233,6 @@ class HtmlPage:
         Returns:
             HTML string, or path if filename was provided
         """
-        from pathlib import Path
-
         html_lines = [
             "<!DOCTYPE html>",
             "<html>",
@@ -533,6 +275,8 @@ class HtmlPage:
             indent_level = "  " * path.count(".")
             tag = node.tag or node.label
             value_str = f': "{node.value}"' if node.is_leaf and node.value else ""
-            attrs = " ".join(f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_"))
+            attrs = " ".join(
+                f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_")
+            )
             attrs_str = f" [{attrs}]" if attrs else ""
             print(f"{indent_level}<{tag}{attrs_str}>{value_str}")
