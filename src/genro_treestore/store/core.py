@@ -1287,3 +1287,146 @@ class TreeStore(SubscriptionMixin):
         """
         from .serialization import from_tytx as deserialize
         return deserialize(data, transport=transport, builder=builder)
+
+    @classmethod
+    def from_xml(
+        cls,
+        data: str,
+        builder: Any | None = None,
+    ) -> 'TreeStore':
+        """Load TreeStore from XML string.
+
+        Each XML element becomes a node with:
+        - label: tag name with counter suffix (element_0, element_1, etc.)
+        - value: text content (leaf) or child TreeStore (branch)
+        - attr: XML attributes, plus '_tag' with namespace prefix if present
+
+        Args:
+            data: XML string to parse.
+            builder: Optional builder for the resulting store.
+
+        Returns:
+            TreeStore with XML structure. Root element is the first node.
+
+        Example:
+            >>> xml = '<html><head><title>Hello</title></head></html>'
+            >>> store = TreeStore.from_xml(xml)
+            >>> store['html_0.head_0.title_0']
+            'Hello'
+        """
+        import xml.etree.ElementTree as ET
+        import re
+
+        # Extract namespace prefixes from XML
+        ns_decls = re.findall(r'xmlns:(\w+)=["\']([^"\']+)["\']', data)
+        uri_to_prefix = {uri: prefix for prefix, uri in ns_decls}
+        ns_pattern = re.compile(r'\{([^}]+)\}(.+)')
+
+        def clean_tag(tag: str) -> tuple[str, str | None]:
+            """Return (local_name, prefixed_tag or None)."""
+            match = ns_pattern.match(tag)
+            if match:
+                uri, local = match.groups()
+                prefix = uri_to_prefix.get(uri)
+                if prefix:
+                    return local, f'{prefix}:{local}'
+                return local, None
+            return tag, None
+
+        def load_element(element: ET.Element, store: 'TreeStore') -> None:
+            """Recursively load XML element into store."""
+            local, prefixed = clean_tag(element.tag)
+            existing = [n.label for n in store.nodes() if n.label.startswith(f'{local}_')]
+            label = f'{local}_{len(existing)}'
+
+            attribs = {k: v for k, v in element.attrib.items() if not k.startswith('{')}
+            if prefixed:
+                attribs['_tag'] = prefixed
+
+            children = list(element)
+            if children:
+                child_store = cls(builder=builder)
+                for child in children:
+                    load_element(child, child_store)
+                store.set_item(label, child_store, _attributes=attribs)
+            else:
+                value = element.text.strip() if element.text else ''
+                store.set_item(label, value, _attributes=attribs)
+
+        root_elem = ET.fromstring(data)
+        store = cls(builder=builder)
+        load_element(root_elem, store)
+        return store
+
+    def to_xml(self, root_tag: str | None = None) -> str:
+        """Serialize TreeStore to XML string.
+
+        Converts the TreeStore hierarchy into an XML document. Each node
+        becomes an XML element with:
+        - tag: node's tag attribute or label without suffix
+        - attributes: node's attr dict (excluding internal _* keys)
+        - content: text value (if leaf) or child elements (if branch)
+
+        Args:
+            root_tag: Optional root element tag. If None and store has
+                exactly one root node, uses that node's tag.
+
+        Returns:
+            XML string representation.
+
+        Example:
+            >>> store = TreeStore()
+            >>> store.set_item('html.head.title', 'Hello')
+            >>> print(store.to_xml())
+            <html><head><title>Hello</title></head></html>
+        """
+        import xml.etree.ElementTree as ET
+
+        def store_to_element(store: 'TreeStore', tag: str) -> ET.Element:
+            """Convert store to XML element."""
+            element = ET.Element(tag)
+
+            for node in store.nodes():
+                # Get tag from attr or strip suffix from label
+                node_tag = node.attr.get('_tag') or node.label.rsplit('_', 1)[0]
+
+                # Copy non-internal attributes
+                attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith('_')}
+
+                if node.is_branch:
+                    # Recurse into child store
+                    child_elem = store_to_element(node.value, node_tag)
+                    child_elem.attrib.update(attribs)
+                    element.append(child_elem)
+                else:
+                    # Leaf node
+                    child_elem = ET.SubElement(element, node_tag, attribs)
+                    if node.value is not None and node.value != '':
+                        child_elem.text = str(node.value)
+
+            return element
+
+        nodes = list(self.nodes())
+        if not nodes:
+            tag = root_tag or 'root'
+            return f'<{tag}/>'
+
+        if len(nodes) == 1 and root_tag is None:
+            # Single root node - use it directly
+            node = nodes[0]
+            tag = node.attr.get('_tag') or node.label.rsplit('_', 1)[0]
+            attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith('_')}
+
+            if node.is_branch:
+                root = store_to_element(node.value, tag)
+                root.attrib.update(attribs)
+            else:
+                root = ET.Element(tag, attribs)
+                if node.value is not None and node.value != '':
+                    root.text = str(node.value)
+        else:
+            # Multiple root nodes - wrap in container
+            tag = root_tag or 'root'
+            root = store_to_element(self, tag)
+
+        return ET.tostring(root, encoding='unicode')

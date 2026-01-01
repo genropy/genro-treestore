@@ -6,13 +6,18 @@
 from .base import BuilderBase
 from .decorators import element, valid_children
 from .html import HtmlBuilder, HtmlHeadBuilder, HtmlBodyBuilder, HtmlPage
+from .rnc import RncBuilder, LazyRncBuilder
+from .xsd import XsdBuilder
 
 __all__ = [
     'BuilderBase',
     'element',
-    'valid_children',  # alias for backwards compatibility
+    'valid_children',
     'HtmlBuilder',
     'HtmlHeadBuilder',
     'HtmlBodyBuilder',
     'HtmlPage',
+    'RncBuilder',
+    'LazyRncBuilder',
+    'XsdBuilder',
 ]

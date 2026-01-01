@@ -38,7 +38,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
-    from ..store import TreeStore as TreeStoreType
+    from genro_treestore import TreeStore as TreeStoreType
 
 
 class TokenType(Enum):
@@ -222,7 +222,7 @@ class RncParser:
             tokens: List of tokens from RncLexer.
         """
         # Import here to avoid circular imports
-        from ..store import TreeStore
+        from genro_treestore import TreeStore
 
         # Filter out comments (but keep doc comments for metadata)
         self.tokens = [t for t in tokens if t.type != TokenType.COMMENT]
@@ -362,13 +362,15 @@ class RncParser:
             self.store.set_item('start', value, **attrs)
             return
 
-        # Handle div { ... }
+        # Handle div { ... } (grouping construct, not element definition)
+        # Only if followed by {, otherwise it's a definition name
         if token.type == TokenType.KEYWORD and token.value == 'div':
-            self.advance()
-            self.expect(TokenType.LBRACE)
-            while not self.accept(TokenType.RBRACE):
-                self._parse_definition()
-            return
+            if self.peek(1).type == TokenType.LBRACE:
+                self.advance()
+                self.expect(TokenType.LBRACE)
+                while not self.accept(TokenType.RBRACE):
+                    self._parse_definition()
+                return
 
         # Handle include "file"
         if token.type == TokenType.KEYWORD and token.value == 'include':
@@ -382,7 +384,9 @@ class RncParser:
             if self.accept(TokenType.LBRACE):
                 while not self.accept(TokenType.RBRACE):
                     self._parse_definition()
-            self.store.set_item(f'_include_{uri}', uri, _type='include')
+            # Sanitize label: replace dots and dashes with underscores
+            safe_uri = uri.replace('.', '_').replace('-', '_').replace('/', '_')
+            self.store.set_item(f'_include_{safe_uri}', uri, _type='include')
             return
 
         # Regular definition: name = pattern

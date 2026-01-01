@@ -24,13 +24,13 @@ if TYPE_CHECKING:
 
 
 # Load schema from JSON
-SCHEMA_PATH = Path(__file__).parent.parent.parent / 'tools' / 'html_tables.json'
+SCHEMA_PATH = Path(__file__).parent / 'html_tables.json'
 
 
 class TableBuilder(BuilderBase):
     """Builder for HTML table elements using JSON schema.
 
-    Schema loaded from tools/html_tables.json provides:
+    Schema loaded from html_tables.json (in same directory) provides:
     - Element children constraints (table → thead, tbody, tr, etc.)
     - Attribute validation via pure Python validation
     - Reference resolution for content categories (=flow)

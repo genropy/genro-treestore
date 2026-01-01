@@ -21,8 +21,8 @@ Resolver System:
     - Sync/async transparency via @smartasync
     - Caching with TTL support
 
-Parsers are available in the `parsers` subpackage:
-    >>> from genro_treestore.parsers import parse_rnc, parse_rnc_file
+RNC schema parsing:
+    >>> from genro_treestore import parse_rnc, parse_rnc_file
 
 Example:
     Basic usage::
@@ -46,7 +46,17 @@ Example:
 
 __version__ = "0.1.0"
 
-from .builders import BuilderBase, HtmlBuilder, HtmlHeadBuilder, HtmlBodyBuilder, HtmlPage
+from .builders import (
+    BuilderBase,
+    HtmlBuilder,
+    HtmlHeadBuilder,
+    HtmlBodyBuilder,
+    HtmlPage,
+    XsdBuilder,
+    element,
+    valid_children,
+)
+from .builders.rnc import parse_rnc, parse_rnc_file
 from .exceptions import (
     InvalidChildError,
     InvalidParentError,
@@ -76,10 +86,19 @@ __all__ = [
     "HtmlHeadBuilder",
     "HtmlBodyBuilder",
     "HtmlPage",
+    "XsdBuilder",
+    # Builder decorators
+    "element",
+    "valid_children",
+    # Subscription types
+    "SubscriberCallback",
     # Exceptions
     "TreeStoreError",
     "InvalidChildError",
     "MissingChildError",
     "TooManyChildrenError",
     "InvalidParentError",
+    # Parsers
+    "parse_rnc",
+    "parse_rnc_file",
 ]
