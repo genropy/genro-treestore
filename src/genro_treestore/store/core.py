@@ -1297,22 +1297,55 @@ class TreeStore(SubscriptionMixin):
         """Load TreeStore from XML string.
 
         Each XML element becomes a node with:
-        - label: tag name with counter suffix (element_0, element_1, etc.)
-        - value: text content (leaf) or child TreeStore (branch)
-        - attr: XML attributes, plus '_tag' with namespace prefix if present
+
+        - **label**: tag name with counter suffix (element_0, element_1, etc.)
+        - **value**: text content (leaf) or child TreeStore (branch)
+        - **attr**: XML attributes, plus '_tag' with namespace prefix if present
+
+        Namespace Handling:
+            XML namespaces are processed as follows:
+
+            - Namespace declarations (xmlns:prefix="uri") are extracted
+            - Element tags with namespaces store the prefixed form in '_tag'
+            - The label uses only the local name (without namespace)
+            - Namespaced attributes are filtered out (not preserved)
+
+            Example with namespaces::
+
+                xml = '''<root xmlns:ns="http://example.com">
+                    <ns:item>value</ns:item>
+                </root>'''
+                store = TreeStore.from_xml(xml)
+                # Label: 'item_0', attr['_tag']: 'ns:item'
 
         Args:
             data: XML string to parse.
             builder: Optional builder for the resulting store.
 
         Returns:
-            TreeStore with XML structure. Root element is the first node.
+            TreeStore with XML structure. The root element becomes
+            the first (and typically only) top-level node.
 
         Example:
-            >>> xml = '<html><head><title>Hello</title></head></html>'
-            >>> store = TreeStore.from_xml(xml)
-            >>> store['html_0.head_0.title_0']
-            'Hello'
+            Simple XML::
+
+                >>> xml = '<html><head><title>Hello</title></head></html>'
+                >>> store = TreeStore.from_xml(xml)
+                >>> store['html_0.head_0.title_0']
+                'Hello'
+
+            Accessing tag and attributes::
+
+                >>> xml = '<div class="main"><span id="x">text</span></div>'
+                >>> store = TreeStore.from_xml(xml)
+                >>> node = store.get_node('div_0.span_0')
+                >>> node.attr['id']
+                'x'
+                >>> node.value
+                'text'
+
+        See Also:
+            - :meth:`to_xml` - Convert TreeStore back to XML
         """
         import xml.etree.ElementTree as ET
         import re
@@ -1363,22 +1396,61 @@ class TreeStore(SubscriptionMixin):
 
         Converts the TreeStore hierarchy into an XML document. Each node
         becomes an XML element with:
-        - tag: node's tag attribute or label without suffix
-        - attributes: node's attr dict (excluding internal _* keys)
-        - content: text value (if leaf) or child elements (if branch)
+
+        - **tag**: from node's '_tag' attribute, or label without suffix
+        - **attributes**: node's attr dict (excluding internal _* keys)
+        - **content**: text value (if leaf) or child elements (if branch)
+
+        Root Element Handling:
+            The root element is determined as follows:
+
+            - If ``root_tag`` is provided, it wraps all content
+            - If store has exactly one top-level node and no ``root_tag``,
+              that node becomes the root element directly
+            - If store has multiple top-level nodes and no ``root_tag``,
+              they are wrapped in a ``<root>`` element
+
+        Tag Resolution:
+            For each node, the XML tag is resolved in order:
+
+            1. ``node.attr['_tag']`` - Explicit tag (may include namespace prefix)
+            2. ``node.label.rsplit('_', 1)[0]`` - Label without counter suffix
+
+            This allows round-trip preservation when loading from XML.
 
         Args:
             root_tag: Optional root element tag. If None and store has
-                exactly one root node, uses that node's tag.
+                exactly one root node, uses that node's tag. If None and
+                store has multiple nodes, defaults to 'root'.
 
         Returns:
-            XML string representation.
+            XML string representation without XML declaration.
 
         Example:
-            >>> store = TreeStore()
-            >>> store.set_item('html.head.title', 'Hello')
-            >>> print(store.to_xml())
-            <html><head><title>Hello</title></head></html>
+            Single root node::
+
+                >>> store = TreeStore()
+                >>> store.set_item('html.head.title', 'Hello')
+                >>> print(store.to_xml())
+                <html><head><title>Hello</title></head></html>
+
+            Multiple top-level nodes::
+
+                >>> store = TreeStore()
+                >>> store.set_item('item', 'first')
+                >>> store.set_item('item', 'second')
+                >>> print(store.to_xml())
+                <root><item>first</item><item>second</item></root>
+
+            With explicit root tag::
+
+                >>> store = TreeStore()
+                >>> store.set_item('item', 'value')
+                >>> print(store.to_xml(root_tag='items'))
+                <items><item>value</item></items>
+
+        See Also:
+            - :meth:`from_xml` - Load TreeStore from XML
         """
         import xml.etree.ElementTree as ET
 

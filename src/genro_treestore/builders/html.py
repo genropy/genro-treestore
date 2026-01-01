@@ -1,10 +1,41 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""HtmlBuilder - Builder for HTML elements with lazy-loaded schema.
+"""HtmlBuilder - HTML5 element builder with content model validation.
 
-Based on WHATWG HTML Living Standard content categories:
-https://html.spec.whatwg.org/multipage/indices.html
+This module provides builders for generating HTML5 documents with
+structural validation based on the WHATWG HTML Living Standard.
+
+Content Categories:
+    HTML5 defines several content categories that determine where
+    elements can appear and what they can contain:
+
+    - **Metadata content**: Elements for document metadata (head section)
+    - **Flow content**: Most elements that can appear in body
+    - **Phrasing content**: Text-level semantics (inline elements)
+    - **Heading content**: Section headings (h1-h6, hgroup)
+    - **Sectioning content**: Document outline elements
+    - **Embedded content**: External resources (img, video, etc.)
+    - **Interactive content**: User interaction elements
+
+References:
+    - WHATWG HTML Standard: https://html.spec.whatwg.org/
+    - Content categories: https://html.spec.whatwg.org/dev/dom.html
+
+Example:
+    Creating an HTML document::
+
+        from genro_treestore import TreeStore
+        from genro_treestore.builders import HtmlBuilder
+
+        store = TreeStore(builder=HtmlBuilder())
+        body = store.body()
+        div = body.div(id='main', class_='container')
+        div.h1(value='Welcome')
+        div.p(value='Hello, World!')
+        ul = div.ul()
+        ul.li(value='Item 1')
+        ul.li(value='Item 2')
 """
 
 from __future__ import annotations
@@ -18,20 +49,24 @@ if TYPE_CHECKING:
     from ..store import TreeStoreNode
 
 
-# HTML Element Schema
-# Categories based on WHATWG HTML Standard content model
-# https://html.spec.whatwg.org/dev/dom.html
+# =============================================================================
+# HTML5 Content Categories
+# Based on WHATWG HTML Standard: https://html.spec.whatwg.org/dev/dom.html
+# =============================================================================
 
+# Void elements - self-closing, cannot have children or text content
 VOID_ELEMENTS = frozenset({
     'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
     'link', 'meta', 'source', 'track', 'wbr'
 })
 
-# Content categories
+# Metadata content - elements for document metadata (in <head>)
 METADATA_CONTENT = frozenset({
     'base', 'link', 'meta', 'noscript', 'script', 'style', 'template', 'title'
 })
 
+# Flow content - most elements allowed in <body>
+# This is the largest category, containing block and inline elements
 FLOW_CONTENT = frozenset({
     'a', 'abbr', 'address', 'article', 'aside', 'audio', 'b', 'bdi', 'bdo',
     'blockquote', 'br', 'button', 'canvas', 'cite', 'code', 'data', 'datalist',
@@ -45,6 +80,7 @@ FLOW_CONTENT = frozenset({
     'time', 'u', 'ul', 'var', 'video', 'wbr'
 })
 
+# Phrasing content - text-level semantics (roughly: inline elements)
 PHRASING_CONTENT = frozenset({
     'a', 'abbr', 'audio', 'b', 'bdi', 'bdo', 'br', 'button', 'canvas', 'cite',
     'code', 'data', 'datalist', 'del', 'dfn', 'em', 'embed', 'i', 'iframe',
@@ -54,49 +90,70 @@ PHRASING_CONTENT = frozenset({
     'sup', 'svg', 'template', 'textarea', 'time', 'u', 'var', 'video', 'wbr'
 })
 
+# Heading content - section headings
 HEADING_CONTENT = frozenset({'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup'})
 
+# Sectioning content - elements that define document outline
 SECTIONING_CONTENT = frozenset({'article', 'aside', 'nav', 'section'})
 
+# Embedded content - external resources
 EMBEDDED_CONTENT = frozenset({
     'audio', 'canvas', 'embed', 'iframe', 'img', 'math', 'object', 'picture',
     'svg', 'video'
 })
 
+# Interactive content - elements for user interaction
 INTERACTIVE_CONTENT = frozenset({
     'a', 'audio', 'button', 'details', 'embed', 'iframe', 'img', 'input',
     'label', 'select', 'textarea', 'video'
 })
 
-# Elements with specific child constraints
+# =============================================================================
+# Element-specific child constraints
+# Maps parent elements to their allowed children
+# =============================================================================
+
 ELEMENT_CHILDREN = {
+    # Document structure
     'html': {'head', 'body'},
     'head': METADATA_CONTENT,
     'body': FLOW_CONTENT,
+
+    # Lists
     'ul': {'li'},
     'ol': {'li'},
     'dl': {'dt', 'dd', 'div'},
+    'menu': {'li'},
+
+    # Tables
     'table': {'caption', 'colgroup', 'thead', 'tbody', 'tfoot', 'tr'},
     'thead': {'tr'},
     'tbody': {'tr'},
     'tfoot': {'tr'},
     'tr': {'th', 'td'},
     'colgroup': {'col'},
+
+    # Forms
     'select': {'option', 'optgroup'},
     'optgroup': {'option'},
     'datalist': {'option'},
     'fieldset': {'legend'} | FLOW_CONTENT,
+
+    # Grouping with special first child
     'figure': {'figcaption'} | FLOW_CONTENT,
     'details': {'summary'} | FLOW_CONTENT,
-    'menu': {'li'},
+
+    # Media
     'picture': {'source', 'img'},
     'audio': {'source', 'track'} | FLOW_CONTENT,
     'video': {'source', 'track'} | FLOW_CONTENT,
+
+    # Other
     'map': {'area'} | FLOW_CONTENT,
     'ruby': {'rt', 'rp'} | PHRASING_CONTENT,
 }
 
-# All known HTML tags
+# All known HTML5 tags (union of all categories plus structural elements)
 ALL_TAGS = (
     METADATA_CONTENT | FLOW_CONTENT | VOID_ELEMENTS |
     {'html', 'head', 'body', 'li', 'dt', 'dd', 'caption', 'colgroup', 'col',

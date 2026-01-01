@@ -21,11 +21,26 @@ Resolver System:
     - Sync/async transparency via @smartasync
     - Caching with TTL support
 
-RNC schema parsing:
-    >>> from genro_treestore import parse_rnc, parse_rnc_file
+Schema Builders:
+    Build TreeStore hierarchies from external schema definitions:
+
+    - **RncBuilder**: From RELAX NG Compact (.rnc) schema files
+    - **XsdBuilder**: From XML Schema (.xsd) files
 
 Example:
-    Basic usage::
+    Basic usage with path access::
+
+        from genro_treestore import TreeStore
+
+        store = TreeStore()
+        store.set_item('config.name', 'MyApp')
+        store.set_item('config.version', '1.0')
+        store.set_item('config.debug', True)
+
+        print(store['config.name'])      # 'MyApp'
+        print(store['config.debug'])     # True
+
+    With lazy computed values::
 
         from genro_treestore import TreeStore, CallbackResolver
 
@@ -33,7 +48,6 @@ Example:
         store.set_item('config.name', 'MyApp')
         store.set_item('config.version', '1.0')
 
-        # Lazy computed value
         def get_full_name(node):
             s = node.parent
             return f"{s.get_item('name')} v{s.get_item('version')}"
@@ -42,6 +56,34 @@ Example:
         store.set_resolver('config.full_name', CallbackResolver(get_full_name))
 
         print(store['config.full_name'])  # "MyApp v1.0"
+
+    With builder pattern (HTML)::
+
+        from genro_treestore import TreeStore
+        from genro_treestore.builders import HtmlBuilder
+
+        store = TreeStore(builder=HtmlBuilder())
+        body = store.body()
+        body.div(id='main').p(value='Hello World!')
+
+    From RNC schema::
+
+        from genro_treestore import TreeStore, parse_rnc
+        from genro_treestore.builders import RncBuilder
+
+        builder = RncBuilder.from_rnc('''
+            start = document
+            document = element doc { section+ }
+            section = element section { title, para* }
+            title = element title { text }
+            para = element para { text }
+        ''')
+
+        store = TreeStore(builder=builder)
+        doc = store.doc()
+        sec = doc.section()
+        sec.title(value='Introduction')
+        sec.para(value='Welcome to TreeStore.')
 """
 
 __version__ = "0.1.0"

@@ -17,14 +17,18 @@ Event Types:
     - 'ins': Node inserted
     - 'del': Node deleted
 
-Callback Signature:
-    callback(node, path, evt, oldvalue=None, index=None, reason=None)
-    - node: The affected TreeStoreNode
-    - path: Dot-separated path from the subscribed store to the node
-    - evt: Event type string
-    - oldvalue: Previous value (for updates)
-    - index: Position index (for insertions/deletions)
-    - reason: Optional reason string (to detect self-triggered events)
+Callback Signature::
+
+    def callback(node, path, evt, oldvalue=None, index=None, reason=None):
+        '''
+        Args:
+            node: The affected TreeStoreNode
+            path: Dot-separated path from the subscribed store to the node
+            evt: Event type ('upd_value', 'upd_attr', 'ins', 'del')
+            oldvalue: Previous value (for 'upd_value' events)
+            index: Position index (for 'ins' and 'del' events)
+            reason: Optional string identifying the change source
+        '''
 
 Example:
     >>> def on_change(node, path, evt, **kw):
@@ -83,14 +87,18 @@ class SubscriptionMixin:
             delete: Callback for node deletions.
             any: Callback for all events (shorthand for update+insert+delete).
 
-        Callback signature:
-            callback(node, path, evt, oldvalue=None, index=None, reason=None)
-            - node: The affected TreeStoreNode
-            - path: Dot-separated path from this store to the node
-            - evt: Event type ('upd_value', 'upd_attr', 'ins', 'del')
-            - oldvalue: Previous value (for updates)
-            - index: Position index (for ins/del)
-            - reason: Optional reason string (to detect self-triggered events)
+        Callback Signature::
+
+            def callback(node, path, evt, oldvalue=None, index=None, reason=None):
+                '''
+                Args:
+                    node: The affected TreeStoreNode
+                    path: Dot-separated path from this store to the node
+                    evt: Event type ('upd_value', 'upd_attr', 'ins', 'del')
+                    oldvalue: Previous value (for 'upd_value' events)
+                    index: Position index (for 'ins' and 'del' events)
+                    reason: Optional string identifying the change source
+                '''
 
         Example:
             >>> def on_change(node, path, evt, **kw):
