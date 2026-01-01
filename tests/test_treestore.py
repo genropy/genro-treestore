@@ -983,3 +983,457 @@ class TestIntegration:
         assert store['html.body.ul.li1'] == 'A'
         assert store['html.body.ul.li2'] == 'B'
         assert store['html.body.ul.li3'] == 'C'
+
+
+class TestTreeStoreCoreEdgeCases:
+    """Tests for edge cases in core.py to achieve 100% coverage."""
+
+    def test_repr(self):
+        """Test __repr__ method."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        repr_str = repr(store)
+        assert "TreeStore" in repr_str
+        assert "'a'" in repr_str
+        assert "'b'" in repr_str
+
+    def test_getattr_private_attribute_raises(self):
+        """Test __getattr__ raises for underscore attributes."""
+        store = TreeStore()
+        with pytest.raises(AttributeError, match="no attribute '_private'"):
+            _ = store._private
+
+    def test_getattr_no_builder_raises(self):
+        """Test __getattr__ raises when no builder and unknown attribute."""
+        store = TreeStore()  # No builder
+        with pytest.raises(AttributeError, match="no attribute 'unknown'"):
+            _ = store.unknown
+
+    def test_get_node_by_position_out_of_range(self):
+        """Test _get_node_by_position raises for out of range index."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        with pytest.raises(KeyError, match="Position #5 out of range"):
+            store['#5']
+
+    def test_get_node_empty_path_raises(self):
+        """Test get_node raises for empty path."""
+        store = TreeStore()
+        with pytest.raises(KeyError, match="Empty path"):
+            store.get_node('')
+
+    def test_insert_node_unknown_position_appends(self):
+        """Test _insert_node with unknown position falls back to append."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        # Unknown position format should append
+        store.set_item('c', 3, _position='unknown_format')
+        assert store.keys() == ['a', 'b', 'c']
+
+    def test_insert_node_negative_position_after(self):
+        """Test _insert_node with >#-N negative position."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        # Insert after position -2 (which is 'b')
+        store.set_item('inserted', 99, _position='>#-2')
+        # Position -2 in [a,b,c] is 'b' (index 1), so after index 1 means index 2
+        assert 'inserted' in store.keys()
+
+    def test_insert_node_negative_position_exact(self):
+        """Test _insert_node with #-N negative position."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        store.set_item('c', 3)
+        # Insert at negative position
+        store.set_item('inserted', 99, _position='#-1')
+        assert 'inserted' in store.keys()
+
+    def test_htraverse_empty_path(self):
+        """Test _htraverse with empty path returns self."""
+        store = TreeStore()
+        parent, label = store._htraverse('')
+        assert parent is store
+        assert label == ''
+
+    def test_htraverse_autocreate_positional_raises(self):
+        """Test _htraverse with autocreate and positional raises."""
+        store = TreeStore()
+        with pytest.raises(KeyError, match="Cannot autocreate with positional"):
+            store._htraverse('#0.child', autocreate=True)
+
+    def test_htraverse_leaf_in_path_raises(self):
+        """Test _htraverse raises when encountering leaf in middle of path."""
+        store = TreeStore()
+        store.set_item('leaf', 'value')  # This is a leaf
+        with pytest.raises(KeyError, match="is a leaf"):
+            store['leaf.child']
+
+    def test_htraverse_leaf_to_branch_autocreate(self):
+        """Test _htraverse converts leaf to branch when autocreating."""
+        store = TreeStore()
+        store.set_item('node', 'value')  # Start as leaf
+        # Now set a child path - should convert to branch
+        store.set_item('node.child', 'child_value')
+        assert store['node.child'] == 'child_value'
+
+    def test_get_attr_missing_path_returns_default(self):
+        """Test get_attr returns default for missing path."""
+        store = TreeStore()
+        assert store.get_attr('missing', 'attr') is None
+        assert store.get_attr('missing', 'attr', 'default') == 'default'
+
+    def test_del_item_with_path(self):
+        """Test del_item with dotted path."""
+        store = TreeStore()
+        store.set_item('parent.child', 'value')
+        node = store.del_item('parent.child')
+        assert node.label == 'child'
+        assert 'child' not in store.get_node('parent').value
+
+    def test_get_nodes_empty_path(self):
+        """Test get_nodes with empty path returns root nodes."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b', 2)
+        nodes = store.get_nodes('')
+        assert len(nodes) == 2
+
+    def test_get_nodes_leaf_returns_empty(self):
+        """Test get_nodes on leaf node returns empty list."""
+        store = TreeStore()
+        store.set_item('leaf', 'value')
+        nodes = store.get_nodes('leaf')
+        assert nodes == []
+
+    def test_iter_digest_unknown_specifier_raises(self):
+        """Test iter_digest raises for unknown specifier."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        with pytest.raises(ValueError, match="Unknown digest specifier"):
+            list(store.iter_digest('#unknown'))
+
+    def test_as_dict_branch_with_attributes(self):
+        """Test as_dict with branch node that has attributes."""
+        store = TreeStore()
+        store.set_item('parent', color='red')  # Branch with attribute
+        parent = store.get_node('parent').value
+        parent.set_item('child', 'value')
+
+        result = store.as_dict()
+        assert 'parent' in result
+        assert result['parent']['color'] == 'red'
+        assert result['parent']['child'] == 'value'
+
+    def test_get_method(self):
+        """Test get() method for direct children lookup."""
+        store = TreeStore()
+        store.set_item('existing', 'value')
+
+        node = store.get('existing')
+        assert node is not None
+        assert node.value == 'value'
+
+        missing = store.get('missing')
+        assert missing is None
+
+        default = store.get('missing', 'default')
+        assert default == 'default'
+
+    def test_update_add_branch_from_other(self):
+        """Test update adds new branch from other TreeStore."""
+        store = TreeStore({'a': 1})
+        other = TreeStore({'b': {'c': 2, 'd': 3}})
+        store.update(other)
+        assert store['a'] == 1
+        assert store['b.c'] == 2
+        assert store['b.d'] == 3
+
+
+class TestTreeStoreXml:
+    """Tests for XML serialization in core.py."""
+
+    def test_from_xml_simple(self):
+        """Test from_xml with simple XML."""
+        xml = '<root><item>value</item></root>'
+        store = TreeStore.from_xml(xml)
+        assert store['root_0.item_0'] == 'value'
+
+    def test_from_xml_with_attributes(self):
+        """Test from_xml preserves XML attributes."""
+        xml = '<div class="container"><span id="x">text</span></div>'
+        store = TreeStore.from_xml(xml)
+        assert store['div_0.span_0'] == 'text'
+        assert store['div_0.span_0?id'] == 'x'
+
+    def test_from_xml_with_namespace(self):
+        """Test from_xml handles namespaces."""
+        xml = '''<root xmlns:ns="http://example.com">
+            <ns:item>value</ns:item>
+        </root>'''
+        store = TreeStore.from_xml(xml)
+        # Namespace prefix should be in _tag attribute
+        node = store.get_node('root_0.item_0')
+        assert node.attr.get('_tag') == 'ns:item'
+
+    def test_from_xml_empty_element(self):
+        """Test from_xml with empty element."""
+        xml = '<root><empty></empty></root>'
+        store = TreeStore.from_xml(xml)
+        assert store['root_0.empty_0'] == ''
+
+    def test_from_xml_multiple_same_tags(self):
+        """Test from_xml with multiple elements of same tag."""
+        xml = '<root><item>first</item><item>second</item></root>'
+        store = TreeStore.from_xml(xml)
+        assert store['root_0.item_0'] == 'first'
+        assert store['root_0.item_1'] == 'second'
+
+    def test_to_xml_simple(self):
+        """Test to_xml with simple structure."""
+        store = TreeStore()
+        store.set_item('item', 'value')
+        xml = store.to_xml()
+        assert '<item>value</item>' in xml
+
+    def test_to_xml_empty_store(self):
+        """Test to_xml with empty store."""
+        store = TreeStore()
+        xml = store.to_xml()
+        assert xml == '<root/>'
+
+    def test_to_xml_empty_store_with_root_tag(self):
+        """Test to_xml with empty store and custom root tag."""
+        store = TreeStore()
+        xml = store.to_xml(root_tag='items')
+        assert xml == '<items/>'
+
+    def test_to_xml_single_leaf_node(self):
+        """Test to_xml with single leaf node (no root wrapper needed)."""
+        store = TreeStore()
+        store.set_item('item', 'value')
+        xml = store.to_xml()
+        assert '<item>value</item>' in xml
+
+    def test_to_xml_single_branch_node(self):
+        """Test to_xml with single branch node."""
+        store = TreeStore()
+        store.set_item('parent.child', 'value')
+        xml = store.to_xml()
+        assert '<parent>' in xml
+        assert '<child>value</child>' in xml
+
+    def test_to_xml_multiple_root_nodes(self):
+        """Test to_xml with multiple root nodes wraps in root."""
+        store = TreeStore()
+        store.set_item('item1', 'first')
+        store.set_item('item2', 'second')
+        xml = store.to_xml()
+        assert '<root>' in xml
+        assert '<item1>first</item1>' in xml
+        assert '<item2>second</item2>' in xml
+
+    def test_to_xml_with_attributes(self):
+        """Test to_xml preserves attributes."""
+        store = TreeStore()
+        store.set_item('div', color='red')
+        div = store.get_node('div').value
+        div.set_item('span', 'text')
+        xml = store.to_xml()
+        assert 'color="red"' in xml
+        assert '<span>text</span>' in xml
+
+    def test_to_xml_with_root_tag(self):
+        """Test to_xml with explicit root_tag."""
+        store = TreeStore()
+        store.set_item('item', 'value')
+        xml = store.to_xml(root_tag='items')
+        assert '<items>' in xml
+        assert '</items>' in xml
+
+    def test_to_xml_with_tag_attribute(self):
+        """Test to_xml uses _tag attribute for element name."""
+        store = TreeStore()
+        store.set_item('item_0', 'value', _tag='custom')
+        xml = store.to_xml()
+        assert '<custom>value</custom>' in xml
+
+    def test_to_xml_empty_value(self):
+        """Test to_xml with empty string value."""
+        store = TreeStore()
+        store.set_item('empty', '')
+        xml = store.to_xml()
+        assert '<empty' in xml
+
+    def test_to_xml_none_value(self):
+        """Test to_xml with None value (branch node)."""
+        store = TreeStore()
+        store.set_item('parent')  # None value = branch
+        xml = store.to_xml()
+        assert '<parent' in xml
+
+    def test_xml_roundtrip(self):
+        """Test XML roundtrip preserves structure."""
+        original = TreeStore()
+        original.set_item('root.child1', 'value1', attr='a')
+        original.set_item('root.child2', 'value2', attr='b')
+
+        xml = original.to_xml()
+        restored = TreeStore.from_xml(xml)
+
+        # Check structure preserved (labels have _0 suffix from from_xml)
+        assert 'root_0' in restored
+        assert restored['root_0.child1_0'] == 'value1'
+        assert restored['root_0.child2_0'] == 'value2'
+
+
+class TestTreeStoreValidation:
+    """Tests for validation methods to complete coverage."""
+
+    def test_is_valid_empty_store(self):
+        """Test is_valid on empty store returns True."""
+        store = TreeStore()
+        assert store.is_valid is True
+
+    def test_validation_errors_empty_store(self):
+        """Test validation_errors on empty store returns empty dict."""
+        store = TreeStore()
+        assert store.validation_errors() == {}
+
+    def test_flattened_empty_walk(self):
+        """Test flattened handles empty walk result."""
+        store = TreeStore()
+        # Empty store should yield nothing
+        result = list(store.flattened())
+        assert result == []
+
+
+class TestTreeStoreCoreAdditionalCoverage:
+    """Additional tests for remaining uncovered lines in core.py."""
+
+    def test_contains_with_path(self):
+        """Test __contains__ with dotted path returns False for missing."""
+        store = TreeStore()
+        store.set_item('a.b', 1)
+        assert 'a.b' in store
+        assert 'a.b.c' not in store  # This path doesn't exist
+
+    def test_index_of_not_found(self):
+        """Test _index_of raises KeyError when label not found."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        with pytest.raises(KeyError, match="Label 'nonexistent' not found"):
+            store._index_of('nonexistent')
+
+    def test_htraverse_positional_not_found_no_autocreate(self):
+        """Test _htraverse raises KeyError for positional not found without autocreate."""
+        store = TreeStore()
+        with pytest.raises(KeyError):
+            store._htraverse('#0.child', autocreate=False)
+
+    def test_htraverse_path_segment_not_found(self):
+        """Test _htraverse raises KeyError for missing path segment."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        with pytest.raises(KeyError, match="Path segment 'b' not found"):
+            store._htraverse('b.c', autocreate=False)
+
+    def test_set_item_update_existing_branch_no_value(self):
+        """Test set_item updates existing branch node attributes without changing value."""
+        store = TreeStore()
+        store.set_item('branch', color='red')
+        # Update attributes on existing branch
+        result = store.set_item('branch', color='blue', size=10)
+        assert store['branch?color'] == 'blue'
+        assert store['branch?size'] == 10
+        # Should return the branch store
+        assert isinstance(result, TreeStore)
+
+    def test_set_item_update_existing_branch_with_value(self):
+        """Test set_item updates existing branch node value."""
+        store = TreeStore()
+        store.set_item('branch')  # Create branch
+        branch = store.get_node('branch').value
+        branch.set_item('child', 'value')
+        # Now update the branch with a new value - this replaces the branch
+        store.set_item('branch', 'new_value')
+        assert store['branch'] == 'new_value'
+
+    def test_walk_with_nested_callback(self):
+        """Test walk with callback on nested structure."""
+        store = TreeStore()
+        store.set_item('parent.child1', 1)
+        store.set_item('parent.child2', 2)
+
+        visited = []
+        store.walk(lambda n: visited.append(n.label))
+        assert 'parent' in visited
+        assert 'child1' in visited
+        assert 'child2' in visited
+
+    def test_from_xml_namespace_without_declared_prefix(self):
+        """Test from_xml with namespace URI that has no declared prefix."""
+        # This XML has a namespace URI but no prefix declaration for it
+        xml = '''<root xmlns="http://default.ns">
+            <item>value</item>
+        </root>'''
+        store = TreeStore.from_xml(xml)
+        # Should still parse, local name extracted
+        assert 'root_0' in store
+
+    def test_to_xml_branch_with_attributes(self):
+        """Test to_xml with branch node that has attributes."""
+        store = TreeStore()
+        store.set_item('parent', color='red')
+        parent = store.get_node('parent').value
+        parent.set_item('child', 'value')
+
+        xml = store.to_xml()
+        assert 'color="red"' in xml
+        assert '<child>value</child>' in xml
+
+    def test_to_xml_single_leaf_with_attributes(self):
+        """Test to_xml with single leaf node with attributes."""
+        store = TreeStore()
+        store.set_item('item', 'value', color='red', size='10')
+        xml = store.to_xml()
+        assert '<item' in xml
+        assert 'color="red"' in xml
+        assert 'size="10"' in xml
+        assert '>value</item>' in xml
+
+    def test_walk_callback_returns_none(self):
+        """Test that walk with callback returns None."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        result = store.walk(lambda n: None)
+        assert result is None
+
+    def test_flattened_with_callback_walk_none(self):
+        """Test flattened when walk returns generator (not None)."""
+        store = TreeStore()
+        store.set_item('a', 1)
+        store.set_item('b.c', 2)
+        result = list(store.flattened())
+        assert len(result) == 3  # a, b, b.c
+
+    def test_is_valid_with_nested_nodes(self):
+        """Test is_valid iterates through nested nodes."""
+        store = TreeStore()
+        store.set_item('parent.child1', 1)
+        store.set_item('parent.child2', 2)
+        # Without builder, all nodes are valid
+        assert store.is_valid is True
+
+    def test_validation_errors_with_nested_nodes(self):
+        """Test validation_errors iterates through nested nodes."""
+        store = TreeStore()
+        store.set_item('parent.child1', 1)
+        store.set_item('parent.child2', 2)
+        # Without builder/validator, no errors
+        errors = store.validation_errors()
+        assert errors == {}

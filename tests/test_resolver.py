@@ -411,3 +411,27 @@ class TestResolverEdgeCases:
 
         assert 'CountingResolver' in repr_str
         assert 'cache_time=300' in repr_str
+
+    def test_base_resolver_load_raises(self):
+        """TreeStoreResolver.load() raises NotImplementedError."""
+        resolver = TreeStoreResolver()
+        with pytest.raises(NotImplementedError, match="must implement load"):
+            resolver.load()
+
+    def test_htraverse_with_remaining_path_on_treestore(self):
+        """_htraverse with remaining_path continues into TreeStore."""
+        inner_data = {'deep': {'_value': 'found_it'}}
+        resolver = TreeStoreReturningResolver(inner_data, cache_time=-1)
+        node = TreeStoreNode('test', resolver=resolver)
+
+        # Access with remaining path
+        result = resolver._htraverse('deep')
+        assert result == 'found_it'
+
+    def test_callback_resolver_repr_with_lambda(self):
+        """CallbackResolver.__repr__ handles lambda functions."""
+        resolver = CallbackResolver(lambda n: n.label)
+        repr_str = repr(resolver)
+        assert 'CallbackResolver' in repr_str
+        # Lambda doesn't have a nice __name__
+        assert '<lambda>' in repr_str or 'lambda' in repr_str.lower()

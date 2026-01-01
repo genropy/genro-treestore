@@ -390,3 +390,104 @@ class TestDirectoryResolverRelocate:
 
         # rel_path should track the relative path
         assert node.attr['rel_path'] == os.path.join('level1', 'level2', 'file.txt')
+
+
+class TestDirectoryResolverEdgeCases:
+    """Tests for edge cases in DirectoryResolver."""
+
+    def test_listdir_oserror(self, tmp_path):
+        """DirectoryResolver handles OSError when listing directory."""
+        # Use a path that doesn't exist
+        store = TreeStore()
+        store.set_item('root')
+        store.set_resolver('root', DirectoryResolver(
+            str(tmp_path / 'nonexistent'), cache_time=-1
+        ))
+
+        # Should return empty store, not raise
+        root_store = store['root']
+        assert len(root_store) == 0
+
+    def test_backup_files_skipped(self, tmp_path):
+        """Backup files (starting with # or ending with ~ or #) are skipped."""
+        # Create backup files
+        (tmp_path / '#backup#').write_text('backup1')
+        (tmp_path / 'file~').write_text('backup2')
+        (tmp_path / '#lock').write_text('lock')
+        (tmp_path / 'normal.txt').write_text('normal')
+
+        store = TreeStore()
+        store.set_item('root')
+        store.set_resolver('root', DirectoryResolver(str(tmp_path), cache_time=-1))
+
+        root_store = store['root']
+        labels = list(root_store.keys())
+
+        # Backup files should be skipped
+        assert not any('#' in l or '~' in l for l in labels)
+        assert 'normal_txt' in labels
+
+    def test_stat_oserror(self, tmp_path, monkeypatch):
+        """DirectoryResolver handles OSError when stat fails."""
+        # Create a file
+        test_file = tmp_path / 'test.txt'
+        test_file.write_text('content')
+
+        original_stat = os.stat
+
+        def failing_stat(path):
+            if 'test.txt' in str(path):
+                raise OSError("Permission denied")
+            return original_stat(path)
+
+        monkeypatch.setattr(os, 'stat', failing_stat)
+
+        store = TreeStore()
+        store.set_item('root')
+        store.set_resolver('root', DirectoryResolver(str(tmp_path), cache_time=-1))
+
+        root_store = store['root']
+        node = store.get_node('root.test_txt')
+
+        # File should be included but with None stats
+        assert node is not None
+        assert node.attr['mtime'] is None
+        assert node.attr['size'] is None
+
+    def test_numbered_caption(self, tmp_path):
+        """File starting with number gets special caption formatting."""
+        # Create file with numbered prefix
+        (tmp_path / '01_introduction.txt').write_text('content')
+        (tmp_path / '02_chapter_two.txt').write_text('content')
+
+        store = TreeStore()
+        store.set_item('root')
+        store.set_resolver('root', DirectoryResolver(str(tmp_path), cache_time=-1))
+
+        root_store = store['root']
+
+        # Check the caption formatting
+        node = store.get_node('root.01_introduction_txt')
+        caption = node.attr['caption']
+        # Should have !!N format for numbered files
+        assert '!!' in caption or 'Introduction' in caption
+
+    def test_directory_resolver_repr(self, tmp_path):
+        """DirectoryResolver.__repr__ produces readable output."""
+        resolver = DirectoryResolver(str(tmp_path), cache_time=500)
+        repr_str = repr(resolver)
+
+        assert 'DirectoryResolver' in repr_str
+        assert str(tmp_path) in repr_str
+        assert 'cache_time=500' in repr_str
+
+    def test_txt_doc_resolver_repr(self, tmp_path):
+        """TxtDocResolver.__repr__ produces readable output."""
+        test_file = tmp_path / 'test.txt'
+        test_file.write_text('content')
+
+        resolver = TxtDocResolver(str(test_file))
+        repr_str = repr(resolver)
+
+        assert 'TxtDocResolver' in repr_str
+        assert str(test_file) in repr_str
