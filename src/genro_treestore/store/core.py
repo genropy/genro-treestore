@@ -43,7 +43,7 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator, TYPE_CHECKING
+from typing import Any, Callable, Iterator, Literal, TYPE_CHECKING
 
 from .node import TreeStoreNode
 from .subscription import SubscriptionMixin, SubscriberCallback
@@ -854,6 +854,112 @@ class TreeStore(SubscriptionMixin):
 
         return _walk_gen(self, _prefix)
 
+    def flattened(
+        self,
+        path_registry: dict[int, str] | None = None,
+    ) -> Iterator[tuple[str | int | None, str, str | None, Any, dict[str, Any]]]:
+        """Yield flat tuples representing the tree in depth-first order.
+
+        Converts the hierarchical tree structure into a flat sequence of tuples,
+        suitable for serialization. Each tuple contains all information needed
+        to reconstruct a node: its parent reference, label, tag, value, and
+        attributes.
+
+        This method is the foundation for TYTX serialization (see to_tytx()).
+
+        Output Modes:
+            **Normal mode** (path_registry=None):
+                Parent references are full path strings. More readable and
+                compresses very well with gzip due to repetitive patterns.
+
+            **Compact mode** (path_registry=dict):
+                Parent references are sequential numeric codes (0, 1, 2...).
+                The provided dict is populated with {code: path} mappings.
+                Produces smaller output without compression (~32% smaller),
+                but gzip actually compresses normal mode better.
+
+        Args:
+            path_registry: Optional dict to enable compact mode.
+                - If None: parent is emitted as path string (normal mode)
+                - If dict: parent is emitted as numeric code, and the dict
+                  is populated with {code: full_path} mappings for branches
+
+        Yields:
+            tuple: (parent, label, tag, value, attr) where:
+                - **parent**: Reference to parent node
+                    - Normal mode: path string ('' for root-level nodes)
+                    - Compact mode: int code (None for root-level nodes)
+                - **label**: Node's unique key within its parent (e.g., 'floor_0')
+                - **tag**: Node type from builder (e.g., 'floor') or None
+                - **value**: Node value
+                    - None for branch nodes (nodes with children)
+                    - Actual value for leaf nodes (scalar values)
+                - **attr**: Dict of node attributes (always a copy)
+
+        Note:
+            - Iteration order is depth-first (parent before children)
+            - Branch nodes have value=None because their "value" is the child store
+            - The path_registry dict is modified in place during iteration
+            - Uses walk() internally for tree traversal
+
+        Example:
+            Normal mode (path strings)::
+
+                >>> store = TreeStore(builder=BuildingBuilder())
+                >>> b = store.building(name='Casa Mia')
+                >>> b.floor(number=1).room(name='Kitchen')
+                >>>
+                >>> for row in store.flattened():
+                ...     parent, label, tag, value, attr = row
+                ...     print(f"{parent!r:20} {label:15} {tag}")
+                ''                   building_0      building
+                'building_0'         floor_0         floor
+                'building_0.floor_0' room_0          room
+
+            Compact mode (numeric codes)::
+
+                >>> paths = {}
+                >>> for row in store.flattened(path_registry=paths):
+                ...     parent, label, tag, value, attr = row
+                ...     print(f"{parent!r:5} {label:15} {tag}")
+                None  building_0      building
+                0     floor_0         floor
+                1     room_0          room
+                >>>
+                >>> paths
+                {0: 'building_0', 1: 'building_0.floor_0'}
+
+        See Also:
+            - to_tytx(): Serializes using this method
+            - walk(): The underlying tree traversal method
+        """
+        if path_registry is not None:
+            path_to_code: dict[str, int] = {}
+            code_counter = 0
+
+        walk_result = self.walk()
+        if walk_result is None:
+            return
+
+        for path, node in walk_result:
+            parent_path = path.rsplit('.', 1)[0] if '.' in path else ''
+            value = None if node.is_branch else node._value
+            attr = dict(node.attr)
+
+            if path_registry is not None:
+                # Emit numeric code for parent
+                parent_code = path_to_code.get(parent_path) if parent_path else None
+                yield (parent_code, node.label, node.tag, value, attr)
+
+                # Register this path if it's a branch (has children)
+                if node.is_branch:
+                    path_to_code[path] = code_counter
+                    path_registry[code_counter] = path
+                    code_counter += 1
+            else:
+                # Emit path string for parent
+                yield (parent_path, node.label, node.tag, value, attr)
+
     # ==================== Navigation ====================
 
     @property
@@ -1068,3 +1174,116 @@ class TreeStore(SubscriptionMixin):
             if node._invalid_reasons:
                 errors[path] = list(node._invalid_reasons)
         return errors
+
+    # ==================== Serialization ====================
+
+    def to_tytx(
+        self,
+        transport: Literal['json', 'msgpack'] | None = None,
+        compact: bool = False,
+    ) -> str | bytes:
+        """Serialize TreeStore to TYTX format with type preservation.
+
+        TYTX (Typed Transport) preserves Python types (Decimal, date, datetime,
+        time) in the serialized format, eliminating manual type conversion when
+        deserializing.
+
+        The tree is serialized as a flat list of row tuples in depth-first order.
+        Each row contains: (parent, label, tag, value, attr).
+
+        Args:
+            transport: Output format:
+                - None or 'json': JSON string (default). Human-readable,
+                  compresses very well with gzip.
+                - 'msgpack': Binary MessagePack bytes. ~30% smaller than JSON
+                  before compression.
+            compact: Serialization mode:
+                - False (default): Parent as path strings ('a.b.c').
+                  Recommended with gzip compression.
+                - True: Parent as numeric codes (0, 1, 2...).
+                  ~32% smaller without compression, but gzip prefers normal.
+
+        Returns:
+            str: If transport is None or 'json'
+            bytes: If transport is 'msgpack'
+
+        Raises:
+            ImportError: If genro-tytx package is not installed.
+
+        Example:
+            >>> from decimal import Decimal
+            >>> from datetime import date
+            >>>
+            >>> store = TreeStore()
+            >>> store.set_item('invoice.amount', Decimal('1234.56'))
+            >>> store.set_item('invoice.date', date(2025, 1, 15))
+            >>>
+            >>> # Default JSON format
+            >>> json_data = store.to_tytx()
+            >>>
+            >>> # Binary MessagePack (smaller)
+            >>> msgpack_data = store.to_tytx(transport='msgpack')
+            >>>
+            >>> # Compact mode (for uncompressed transmission)
+            >>> compact_data = store.to_tytx(compact=True)
+
+        See Also:
+            - from_tytx(): Deserialize back to TreeStore
+            - flattened(): The underlying flat representation
+        """
+        from .serialization import to_tytx as serialize
+        return serialize(self, transport=transport, compact=compact)
+
+    @classmethod
+    def from_tytx(
+        cls,
+        data: str | bytes,
+        transport: Literal['json', 'msgpack'] | None = None,
+        builder: Any | None = None,
+    ) -> 'TreeStore':
+        """Deserialize TreeStore from TYTX format with type preservation.
+
+        Reconstructs a TreeStore from TYTX-serialized data. Automatically
+        detects normal vs compact format. Types (Decimal, date, datetime, time)
+        are preserved exactly as they were before serialization.
+
+        Args:
+            data: Serialized data from to_tytx().
+                - str: If transport is None or 'json'
+                - bytes: If transport is 'msgpack'
+            transport: Input format (must match serialization):
+                - None or 'json': Parse as JSON string (default)
+                - 'msgpack': Parse as MessagePack bytes
+            builder: Optional builder for the reconstructed store.
+                Enables builder methods (e.g., store.div()) on the result.
+
+        Returns:
+            TreeStore: Fully reconstructed tree with:
+                - Complete node hierarchy
+                - All values with original types preserved
+                - All node attributes restored
+
+        Raises:
+            ImportError: If genro-tytx package is not installed.
+
+        Example:
+            >>> # Basic round-trip
+            >>> original = TreeStore()
+            >>> original.set_item('config.price', Decimal('99.99'))
+            >>> data = original.to_tytx()
+            >>>
+            >>> restored = TreeStore.from_tytx(data)
+            >>> restored['config.price']  # Decimal('99.99'), not float
+            >>>
+            >>> # With MessagePack
+            >>> data = original.to_tytx(transport='msgpack')
+            >>> restored = TreeStore.from_tytx(data, transport='msgpack')
+            >>>
+            >>> # With builder
+            >>> restored = TreeStore.from_tytx(data, builder=HtmlBuilder())
+
+        See Also:
+            - to_tytx(): Serialize TreeStore to TYTX format
+        """
+        from .serialization import from_tytx as deserialize
+        return deserialize(data, transport=transport, builder=builder)
