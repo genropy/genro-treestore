@@ -229,17 +229,23 @@ def element(
     # Parse tags - handle string, tuple of strings, or tuple of (tag, model) pairs
     tag_list, tag_models = _parse_tags_with_models(tags)
 
+    # Check if children spec contains =references (need runtime resolution)
+    children_str = children if isinstance(children, str) else ','.join(children)
+    has_refs = '=' in children_str
+
     # Parse children specs - accept both string and tuple
+    # Skip parsing if there are references (will be resolved at runtime)
     parsed_children: dict[str, tuple[int, int | None]] = {}
 
-    if isinstance(children, str):
-        specs = [s.strip() for s in children.split(',') if s.strip()]
-    else:
-        specs = list(children)
+    if not has_refs:
+        if isinstance(children, str):
+            specs = [s.strip() for s in children.split(',') if s.strip()]
+        else:
+            specs = list(children)
 
-    for spec in specs:
-        tag, min_c, max_c = _parse_tag_spec(spec)
-        parsed_children[tag] = (min_c, max_c)
+        for spec in specs:
+            tag, min_c, max_c = _parse_tag_spec(spec)
+            parsed_children[tag] = (min_c, max_c)
 
     def decorator(func: Callable) -> Callable:
         # Determine validation model(s)
@@ -287,8 +293,14 @@ def element(
         # Store validation rules on the function
         # _valid_children: set of allowed tag names
         # _child_cardinality: dict mapping tag -> (min, max)
-        wrapper._valid_children = frozenset(parsed_children.keys())
-        wrapper._child_cardinality = parsed_children
+        if has_refs:
+            # Contains =references - store raw spec for runtime resolution
+            wrapper._raw_children_spec = children
+            wrapper._valid_children = frozenset()  # Will be resolved at runtime
+            wrapper._child_cardinality = {}
+        else:
+            wrapper._valid_children = frozenset(parsed_children.keys())
+            wrapper._child_cardinality = parsed_children
 
         # Store tags this method handles
         # If no tags specified, will use method name (set in __init_subclass__)

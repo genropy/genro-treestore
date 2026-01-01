@@ -54,6 +54,94 @@ class BuilderBase(ABC):
     # Schema dict for external element definitions (optional)
     _schema: dict[str, dict] = {}
 
+    def _resolve_ref(self, value: Any) -> Any:
+        """Resolve =ref references by looking up _ref_<name> properties.
+
+        References use the = prefix convention (static pointer in Genropy):
+        - '=flow' → looks up self._ref_flow property
+        - '=phrasing' → looks up self._ref_phrasing property
+
+        Handles comma-separated strings with mixed refs and literals:
+        - '=appliances, sink' → split, resolve '=appliances', keep 'sink', rejoin
+
+        This allows:
+        - Override in subclasses (properties can be overridden)
+        - Computed/lazy values (property getter is called each time)
+        - Use in both _schema dict and @element decorator
+
+        Args:
+            value: The value to resolve. Can be:
+                   - '=ref' → single reference
+                   - '=ref, tag, =other' → mixed refs and literals
+                   - set/frozenset containing references
+
+        Returns:
+            The resolved value, or the original value if not a reference.
+
+        Raises:
+            ValueError: If reference property not found on builder.
+
+        Example:
+            >>> class MyBuilder(BuilderBase):
+            ...     @property
+            ...     def _ref_flow(self):
+            ...         return 'div, p, span, a'
+            ...
+            ...     _schema = {
+            ...         'section': {'children': '=flow'},
+            ...         'kitchen': {'children': '=appliances, sink'},
+            ...     }
+        """
+        # Handle sets/frozensets containing references
+        if isinstance(value, (set, frozenset)):
+            resolved = set()
+            for item in value:
+                resolved_item = self._resolve_ref(item)
+                if isinstance(resolved_item, (set, frozenset)):
+                    resolved.update(resolved_item)
+                elif isinstance(resolved_item, str):
+                    # Could be comma-separated string
+                    resolved.update(t.strip() for t in resolved_item.split(',') if t.strip())
+                else:
+                    resolved.add(resolved_item)
+            return frozenset(resolved) if isinstance(value, frozenset) else resolved
+
+        if not isinstance(value, str):
+            return value
+
+        # If string contains comma, split and resolve each part recursively
+        if ',' in value:
+            parts = [p.strip() for p in value.split(',') if p.strip()]
+            resolved_parts = []
+            for part in parts:
+                resolved_part = self._resolve_ref(part)
+                if isinstance(resolved_part, (set, frozenset)):
+                    # Convert set to comma-separated string
+                    resolved_parts.extend(resolved_part)
+                elif isinstance(resolved_part, str):
+                    resolved_parts.append(resolved_part)
+                else:
+                    resolved_parts.append(str(resolved_part))
+            return ', '.join(resolved_parts)
+
+        # Single value - check if it's a reference
+        if value.startswith('='):
+            ref_name = value[1:]  # '=flow' → 'flow'
+            prop_name = f'_ref_{ref_name}'
+
+            # Check if property exists on this instance
+            if hasattr(self, prop_name):
+                resolved = getattr(self, prop_name)
+                # Recursively resolve in case the property returns another ref
+                return self._resolve_ref(resolved)
+
+            raise ValueError(
+                f"Reference '{value}' not found: "
+                f"no '{prop_name}' property on {type(self).__name__}"
+            )
+
+        return value
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Build the _element_tags dict from @element decorated methods."""
         super().__init_subclass__(**kwargs)
@@ -109,14 +197,21 @@ class BuilderBase(ABC):
         Args:
             tag: The tag name.
             spec: Schema spec dict with keys: children, leaf, model.
+                  Values can be =references resolved via _ref_* properties.
 
         Returns:
             A callable that creates the element.
         """
         is_leaf = spec.get('leaf', False)
-        model = spec.get('model')
+        model_spec = spec.get('model')
+
+        # Capture self for closure
+        builder = self
 
         def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
+            # Resolve model reference at call time (allows dynamic resolution)
+            model = builder._resolve_ref(model_spec)
+
             # Validate attributes with Pydantic model if specified
             if model is not None:
                 try:
@@ -134,11 +229,14 @@ class BuilderBase(ABC):
             # Determine value: user-provided > leaf default > branch (None)
             if value is None and is_leaf:
                 value = ''
-            return self.child(target, tag, label=label, value=value, **attr)
+            return builder.child(target, tag, label=label, value=value, **attr)
 
         # Store validation rules on the handler for check() to find
+        # Note: children_spec is resolved at validation time, not here
         children_spec = spec.get('children')
         if children_spec is not None:
+            # Store raw spec - will be resolved in _parse_children_spec
+            handler._raw_children_spec = children_spec
             handler._valid_children, handler._child_cardinality = \
                 self._parse_children_spec(children_spec)
         else:
@@ -155,21 +253,24 @@ class BuilderBase(ABC):
 
         Args:
             spec: Can be:
-                - str: 'tag1, tag2[:1], tag3[1:]'
-                - set/frozenset: {'tag1', 'tag2', 'tag3'}
+                - str: 'tag1, tag2[:1], tag3[1:]' or '=ref' or '=ref, tag'
+                - set/frozenset: {'tag1', 'tag2', '=ref'}
 
         Returns:
             Tuple of (valid_children frozenset, cardinality dict).
         """
         from .decorators import _parse_tag_spec
 
-        if isinstance(spec, (set, frozenset)):
+        # First, resolve any =references (handles split and recursion)
+        resolved_spec = self._resolve_ref(spec)
+
+        if isinstance(resolved_spec, (set, frozenset)):
             # Simple set of tags, no cardinality
-            return frozenset(spec), {}
+            return frozenset(resolved_spec), {}
 
         # Parse string spec with cardinality
         parsed: dict[str, tuple[int, int | None]] = {}
-        specs = [s.strip() for s in spec.split(',') if s.strip()]
+        specs = [s.strip() for s in resolved_spec.split(',') if s.strip()]
         for tag_spec in specs:
             tag, min_c, max_c = _parse_tag_spec(tag_spec)
             parsed[tag] = (min_c, max_c)
@@ -256,6 +357,12 @@ class BuilderBase(ABC):
             method_name = element_tags[tag]
             method = getattr(self, method_name, None)
             if method is not None:
+                # Check for raw children spec (needs dynamic resolution)
+                raw_spec = getattr(method, '_raw_children_spec', None)
+                if raw_spec is not None:
+                    # Re-parse with current instance for =ref resolution
+                    return self._parse_children_spec(raw_spec)
+                # Otherwise use pre-computed values
                 valid = getattr(method, '_valid_children', None)
                 cardinality = getattr(method, '_child_cardinality', {})
                 return valid, cardinality
