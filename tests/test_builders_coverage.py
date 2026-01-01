@@ -632,7 +632,6 @@ class TestHtmlPage:
 
     def test_html_page_to_html_with_filename_no_dir(self, tmp_path, monkeypatch):
         """Test saving HtmlPage without output_dir uses cwd."""
-        import os
         monkeypatch.chdir(tmp_path)
 
         page = HtmlPage()

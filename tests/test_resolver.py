@@ -4,7 +4,6 @@
 """Tests for the TreeStore resolver system."""
 
 import time
-from datetime import datetime
 
 import pytest
 
@@ -374,7 +373,7 @@ class TestResolverEdgeCases:
     def test_resolver_with_remaining_path_non_treestore(self):
         """remaining_path is ignored if result is not a TreeStore."""
         resolver = CountingResolver('scalar_value', cache_time=-1)
-        node = TreeStoreNode('test', resolver=resolver)
+        TreeStoreNode('test', resolver=resolver)
 
         # _htraverse with remaining_path on non-TreeStore result
         result = resolver._htraverse('some.path')
@@ -422,7 +421,7 @@ class TestResolverEdgeCases:
         """_htraverse with remaining_path continues into TreeStore."""
         inner_data = {'deep': {'_value': 'found_it'}}
         resolver = TreeStoreReturningResolver(inner_data, cache_time=-1)
-        node = TreeStoreNode('test', resolver=resolver)
+        TreeStoreNode('test', resolver=resolver)
 
         # Access with remaining path
         result = resolver._htraverse('deep')

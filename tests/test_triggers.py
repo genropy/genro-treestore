@@ -3,9 +3,7 @@
 
 """Tests for TreeStore trigger/subscription system."""
 
-import pytest
-
-from genro_treestore import TreeStore, TreeStoreNode
+from genro_treestore import TreeStore
 
 
 class TestStoreSubscribeInsert:
@@ -283,7 +281,6 @@ class TestStoreSubscribeReason:
 
         store.subscribe('test', update=on_update)
 
-        node = store.get_node('item') if 'item' in store else None
         store.set_item('item', 'old')
         store.get_node('item').set_value('new', reason='my_renderer')
 

@@ -87,7 +87,7 @@ class TestReactiveValidationCardinality:
     def test_thead_requires_at_least_one_tr(self):
         """thead with children='tr[1:]' should be invalid without tr."""
         store = TreeStore(builder=TableBuilder())
-        thead = store.thead()
+        store.thead()
 
         # thead node should have cardinality error
         thead_node = store.get_node('thead_0')
@@ -129,7 +129,7 @@ class TestReactiveValidationCardinality:
     def test_table_requires_exactly_one_thead(self):
         """table with children='thead[1], tbody[1]' should require exactly one."""
         store = TreeStore(builder=TableBuilder())
-        table = store.table()
+        store.table()
 
         table_node = store.get_node('table_0')
         # Should be invalid - missing thead and tbody
@@ -140,7 +140,7 @@ class TestReactiveValidationCardinality:
     def test_tbody_allows_any_number_of_tr(self):
         """tbody with children='tr' should allow any number."""
         store = TreeStore(builder=TableBuilder())
-        tbody = store.tbody()
+        store.tbody()
 
         tbody_node = store.get_node('tbody_0')
         # Should be valid even without tr (no min constraint)
@@ -278,7 +278,7 @@ class TestSelectOptionCardinality:
     def test_select_requires_at_least_one_option(self):
         """select with children='option[1:]' should be invalid without option."""
         store = TreeStore(builder=FormBuilder())
-        select = store.select()
+        store.select()
 
         select_node = store.get_node('select_0')
         assert not select_node.is_valid

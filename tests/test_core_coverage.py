@@ -4,7 +4,8 @@
 """Additional tests to achieve 100% coverage on core modules."""
 
 import pytest
-from genro_treestore import TreeStore, TreeStoreNode
+
+from genro_treestore import TreeStore
 from genro_treestore.store.loading import load_from_dict
 
 

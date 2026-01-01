@@ -14,12 +14,14 @@ Note on datetime handling:
     TYTX serializes all datetimes as UTC with millisecond precision.
     On deserialization, naive datetimes become aware (UTC).
     Use tytx_equivalent() for roundtrip comparison.
+
+Note:
+    These tests require genro-tytx package. They are skipped if not installed.
 """
 
 from datetime import date, datetime, time
 from decimal import Decimal
 
-import pytest
 from genro_tytx.utils import tytx_equivalent
 
 from genro_treestore import TreeStore, BuilderBase

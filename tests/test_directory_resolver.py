@@ -70,7 +70,7 @@ class TestDirectoryResolverBasic:
 
         # .hidden should not be present
         labels = list(root_store.keys())
-        assert not any(l.startswith('.') or 'hidden' in l for l in labels)
+        assert not any(lbl.startswith('.') or 'hidden' in lbl for lbl in labels)
 
     def test_hidden_files_included_with_invisible(self, temp_dir):
         """Hidden files included when invisible=True."""
@@ -424,7 +424,7 @@ class TestDirectoryResolverEdgeCases:
         labels = list(root_store.keys())
 
         # Backup files should be skipped
-        assert not any('#' in l or '~' in l for l in labels)
+        assert not any('#' in lbl or '~' in lbl for lbl in labels)
         assert 'normal_txt' in labels
 
     def test_stat_oserror(self, tmp_path, monkeypatch):
@@ -446,7 +446,7 @@ class TestDirectoryResolverEdgeCases:
         store.set_item('root')
         store.set_resolver('root', DirectoryResolver(str(tmp_path), cache_time=-1))
 
-        root_store = store['root']
+        _ = store['root']  # Trigger resolver
         node = store.get_node('root.test_txt')
 
         # File should be included but with None stats
@@ -464,7 +464,7 @@ class TestDirectoryResolverEdgeCases:
         store.set_item('root')
         store.set_resolver('root', DirectoryResolver(str(tmp_path), cache_time=-1))
 
-        root_store = store['root']
+        _ = store['root']  # Trigger resolver
 
         # Check the caption formatting
         node = store.get_node('root.01_introduction_txt')
