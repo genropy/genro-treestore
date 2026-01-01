@@ -8,7 +8,7 @@ The `builders` package provides typed APIs for constructing TreeStore hierarchie
 graph TB
     subgraph "genro_treestore.builders"
         BASE[base.py<br/>BuilderBase]
-        DEC[decorators.py<br/>@element, @valid_children]
+        DEC[decorators.py<br/>@element]
         HTML[html.py<br/>HtmlBuilder]
 
         subgraph "rnc/"
@@ -41,13 +41,12 @@ graph TB
 ### @element
 
 ```{eval-rst}
-.. autodecorator:: genro_treestore.element
+.. autofunction:: genro_treestore.element
 ```
 
-### @valid_children
-
-```{eval-rst}
-.. autodecorator:: genro_treestore.valid_children
+```{note}
+`valid_children` is an alias for `element` - they are the same decorator.
+The `element` decorator handles both tag registration and children validation.
 ```
 
 ## HtmlBuilder
