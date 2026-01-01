@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "genro-treestore"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hierarchical data structures with builder pattern support for Genro Kyō"
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["tree", "treestore", "builder", "hierarchical", "genro"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
