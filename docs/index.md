@@ -1,87 +1,133 @@
-# Genro-TreeStore
+# Genro-TreeStore Documentation
 
-A lightweight, zero-dependency hierarchical data structure for the Genro ecosystem.
+**A lightweight hierarchical data structure with builder pattern support for the Genro ecosystem (Genro Kyo).**
+
+TreeStore provides a powerful tree-based container with O(1) path lookup, reactive subscriptions, lazy value resolution, and schema-driven builders.
 
 ```{toctree}
 :maxdepth: 2
-:caption: Contents
+:caption: User Guide
 
 guide/quickstart
 guide/path-syntax
 guide/builders
+guide/resolvers
+guide/subscriptions
+guide/serialization
 guide/validation
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: API Reference
+
 api/index
+api/store
+api/builders
+api/resolvers
+api/exceptions
 ```
 
-## Overview
+## Architecture Overview
 
-**genro-treestore** provides two complementary APIs:
+```{mermaid}
+graph TB
+    subgraph "TreeStore Core"
+        TS[TreeStore<br/>Container]
+        TSN[TreeStoreNode<br/>Node wrapper]
+        TS -->|contains| TSN
+        TSN -->|value is| TS2[TreeStore<br/>Branch]
+        TSN -->|or| VAL[Leaf Value]
+        TSN -->|parent ref| TS
+        TS2 -->|parent ref| TSN
+    end
 
-1. **TreeStore**: Hierarchical data with `set_item`/`get_item`, path autocreate, fluent chaining
-2. **TreeStoreBuilder**: Builder pattern with auto-labeling and validation
+    subgraph "Features"
+        RES[Resolvers<br/>Lazy values]
+        SUB[Subscriptions<br/>Reactive events]
+        BLD[Builders<br/>Typed APIs]
+        VAL2[Validation<br/>Structure rules]
+    end
 
-### TreeStore API
-
-```python
-from genro_treestore import TreeStore
-
-store = TreeStore()
-
-# Create nested structure with autocreate
-store.set_item('config.database.host', 'localhost')
-store.set_item('config.database.port', 5432)
-
-# Access values
-store['config.database.host']  # 'localhost'
-
-# Fluent chaining
-store.set_item('html').set_item('body').set_item('div', id='main')
-
-# Attributes
-store.set_attr('html.body.div', color='red')
-store['html.body.div?color']  # 'red'
-
-# Digest
-store.digest('#k')  # labels
-store.digest('#v')  # values
-store.digest('#k,#v,#a.color')  # tuples
-```
-
-### TreeStoreBuilder (Builder Pattern)
-
-```python
-from genro_treestore import TreeStoreBuilder, valid_children
-
-class HtmlBuilder(TreeStoreBuilder):
-    @valid_children('li')
-    def ul(self, **attr):
-        return self.child('ul', **attr)
-
-    def li(self, value=None, **attr):
-        return self.child('li', value=value, **attr)
-
-builder = HtmlBuilder()
-ul = builder.ul()
-ul.li('Item 1')
-ul.li('Item 2')
-
-# Auto-labels: ul_0, li_0, li_1
-builder['ul_0.li_0']  # 'Item 1'
+    TS --> RES
+    TS --> SUB
+    TS --> BLD
+    BLD --> VAL2
 ```
 
 ## Key Features
 
-- **Zero dependencies**: Pure Python, no external packages
-- **O(1) lookup**: Dict-based internal storage
-- **Path autocreate**: `store.set_item('a.b.c', value)` creates all intermediate nodes
-- **Fluent chaining**: Chain `set_item` calls for readable code
-- **Digest**: Extract data with `#k`, `#v`, `#a` syntax
-- **Builder validation**: `@valid_children` with cardinality constraints
+| Feature | Description |
+|---------|-------------|
+| **O(1) Lookup** | Direct path-based access via internal index |
+| **Builder Pattern** | Fluent APIs with auto-labeling and validation |
+| **Reactive Subscriptions** | Event propagation for insert/update/delete |
+| **Lazy Resolvers** | Dynamic value computation with TTL caching |
+| **Schema Builders** | Generate builders from RNC or XSD schemas |
+| **Type-Safe Serialization** | TYTX format preserves Decimal, date, datetime |
+
+## Quick Example
+
+```python
+from genro_treestore import TreeStore
+from genro_treestore.builders import HtmlBuilder
+
+# Basic TreeStore usage
+store = TreeStore()
+store.set_item('config.database.host', 'localhost')
+store.set_item('config.database.port', 5432)
+
+print(store['config.database.host'])  # 'localhost'
+
+# With HtmlBuilder
+store = TreeStore(builder=HtmlBuilder())
+body = store.body()
+div = body.div(id='main')
+div.h1(value='Welcome')
+div.p(value='Hello, World!')
+
+print(store['body_0.div_0.h1_0'])  # 'Welcome'
+```
 
 ## Installation
 
 ```bash
 pip install genro-treestore
+```
+
+## Module Structure
+
+```{mermaid}
+graph TB
+    subgraph "genro_treestore"
+        INIT[__init__.py<br/>Public API]
+
+        subgraph "store/"
+            CORE[core.py<br/>TreeStore]
+            NODE[node.py<br/>TreeStoreNode]
+            SUB[subscription.py<br/>Events]
+            SER[serialization.py<br/>TYTX]
+        end
+
+        subgraph "builders/"
+            BASE[base.py<br/>BuilderBase]
+            HTML[html.py<br/>HtmlBuilder]
+            RNC[rnc/<br/>RncBuilder]
+            XSD[xsd/<br/>XsdBuilder]
+        end
+
+        subgraph "resolvers/"
+            RBASE[base.py<br/>TreeStoreResolver]
+            DIR[directory.py<br/>DirectoryResolver]
+        end
+
+        EXC[exceptions.py]
+        VAL[validation.py]
+    end
+
+    INIT --> CORE
+    INIT --> BASE
+    INIT --> RBASE
 ```
 
 ## License
