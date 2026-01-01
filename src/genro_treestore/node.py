@@ -33,7 +33,7 @@ class TreeStoreNode:
         'Alice'
     """
 
-    __slots__ = ('label', 'attr', '_value', 'parent', 'tag', '_node_subscribers', '_resolver')
+    __slots__ = ('label', 'attr', '_value', 'parent', 'tag', '_node_subscribers', '_resolver', '_invalid_reasons')
 
     def __init__(
         self,
@@ -61,6 +61,7 @@ class TreeStoreNode:
         self.tag = tag
         self._node_subscribers: dict[str, NodeSubscriberCallback] = {}
         self._resolver: TreeStoreResolver | None = None
+        self._invalid_reasons: list[str] = []
         if resolver is not None:
             self.resolver = resolver  # Use setter to set parent_node
 
@@ -233,5 +234,10 @@ class TreeStoreNode:
             subscriber_id: The subscription identifier to remove.
         """
         self._node_subscribers.pop(subscriber_id, None)
+
+    @property
+    def is_valid(self) -> bool:
+        """True if this node has no validation errors."""
+        return len(self._invalid_reasons) == 0
 
 

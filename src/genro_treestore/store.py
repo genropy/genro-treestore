@@ -34,6 +34,7 @@ class TreeStore:
     __slots__ = (
         '_nodes', '_order', 'parent', '_builder',
         '_upd_subscribers', '_ins_subscribers', '_del_subscribers',
+        '_raise_on_error', '_validator',
     )
 
     def __init__(
@@ -41,6 +42,7 @@ class TreeStore:
         source: dict | list | TreeStore | None = None,
         parent: TreeStoreNode | None = None,
         builder: Any | None = None,
+        raise_on_error: bool = True,
     ) -> None:
         """Initialize a TreeStore.
 
@@ -54,12 +56,18 @@ class TreeStore:
             builder: Optional builder object that provides domain-specific methods.
                 When set, attribute access delegates to the builder, enabling
                 fluent API like store.div(), store.meta(), etc.
+            raise_on_error: If True (default), raises ValueError on hard errors
+                (invalid attributes, invalid child tags, too many children).
+                Soft errors (missing required children) are always collected
+                in node._invalid_reasons without raising.
+                If False, all errors are collected without raising.
 
         Example:
             >>> TreeStore({'a': 1, 'b': {'c': 2}})
             >>> TreeStore([('x', 1), ('y', 2, {'color': 'red'})])
             >>> TreeStore(other_store)  # copy
             >>> TreeStore(builder=HtmlBodyBuilder())  # with builder
+            >>> TreeStore(builder=HtmlBuilder(), raise_on_error=False)  # permissive mode
         """
         self._nodes: dict[str, TreeStoreNode] = {}
         self._order: list[TreeStoreNode] = []
@@ -68,6 +76,13 @@ class TreeStore:
         self._upd_subscribers: dict[str, SubscriberCallback] = {}
         self._ins_subscribers: dict[str, SubscriberCallback] = {}
         self._del_subscribers: dict[str, SubscriberCallback] = {}
+        self._raise_on_error = raise_on_error
+        self._validator = None
+
+        # Auto-register validation subscriber if builder is set
+        if builder is not None and parent is None:
+            from .validation import ValidationSubscriber
+            self._validator = ValidationSubscriber(self)
 
         if source is not None:
             self._load_source(source)
@@ -1138,3 +1153,53 @@ class TreeStore:
     def get(self, label: str, default: Any = None) -> TreeStoreNode | None:
         """Get node by label at this level, with default."""
         return self._nodes.get(label, default)
+
+    # ==================== Validation ====================
+
+    @property
+    def is_valid(self) -> bool:
+        """True if all nodes in this store are valid.
+
+        Recursively checks all nodes in the tree for validation errors.
+
+        Returns:
+            True if no node has validation errors, False otherwise.
+
+        Example:
+            >>> store = TreeStore(builder=HtmlBuilder())
+            >>> thead = store.thead()
+            >>> store.is_valid
+            False  # thead requires at least 1 tr
+            >>> thead.tr()
+            >>> store.is_valid
+            True
+        """
+        walk_result = self.walk()
+        if walk_result is None:
+            return True
+        for path, node in walk_result:
+            if not node.is_valid:
+                return False
+        return True
+
+    def validation_errors(self) -> dict[str, list[str]]:
+        """Return all validation errors in the tree.
+
+        Returns:
+            Dictionary mapping node paths to their error lists.
+            Only includes nodes with errors.
+
+        Example:
+            >>> store = TreeStore(builder=HtmlBuilder())
+            >>> thead = store.thead()
+            >>> store.validation_errors()
+            {'thead_0': ["requires at least 1 'tr', has 0"]}
+        """
+        errors: dict[str, list[str]] = {}
+        walk_result = self.walk()
+        if walk_result is None:
+            return errors
+        for path, node in walk_result:
+            if node._invalid_reasons:
+                errors[path] = list(node._invalid_reasons)
+        return errors

@@ -67,22 +67,29 @@ class BuilderBase(ABC):
     # Schema dict for external element definitions (optional)
     _schema: dict[str, dict] = {}
 
-    def _validate_attrs(self, tag: str, attrs: dict[str, Any]) -> None:
+    def _validate_attrs(
+        self, tag: str, attrs: dict[str, Any], raise_on_error: bool = True
+    ) -> list[str]:
         """Validate attributes against schema specification (pure Python).
 
         Args:
             tag: The tag name to get attrs spec for.
             attrs: Dict of attribute values to validate.
+            raise_on_error: If True, raises ValueError on validation failure.
+                If False, returns list of error messages.
+
+        Returns:
+            List of error messages (empty if valid).
 
         Raises:
-            ValueError: If validation fails.
+            ValueError: If validation fails and raise_on_error is True.
         """
         schema = getattr(self, '_schema', {})
         spec = schema.get(tag, {})
         attrs_spec = spec.get('attrs')
 
         if not attrs_spec:
-            return
+            return []
 
         errors = []
 
@@ -148,8 +155,10 @@ class BuilderBase(ABC):
                     # Allow conversion to string
                     pass
 
-        if errors:
+        if errors and raise_on_error:
             raise ValueError(f"Attribute validation failed for '{tag}': " + "; ".join(errors))
+
+        return errors
 
     def _resolve_ref(self, value: Any) -> Any:
         """Resolve =ref references by looking up _ref_<name> properties.
@@ -307,9 +316,7 @@ class BuilderBase(ABC):
         builder = self
 
         def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
-            # Validate attributes against schema spec
-            builder._validate_attrs(tag, attr)
-
+            # Validation is handled by ValidationSubscriber after node creation
             # Determine value: user-provided > leaf default > branch (None)
             if value is None and is_leaf:
                 value = ''

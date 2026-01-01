@@ -58,6 +58,7 @@ from .directory_resolver import DirectoryResolver, TxtDocResolver
 from .node import TreeStoreNode
 from .resolver import CallbackResolver, TreeStoreResolver
 from .store import TreeStore
+from .validation import ValidationSubscriber
 
 __all__ = [
     # Core classes
@@ -68,6 +69,8 @@ __all__ = [
     "CallbackResolver",
     "DirectoryResolver",
     "TxtDocResolver",
+    # Validation
+    "ValidationSubscriber",
     # Builder classes
     "BuilderBase",
     "HtmlBuilder",
