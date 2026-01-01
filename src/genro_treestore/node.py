@@ -9,6 +9,7 @@ from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .store import TreeStore
+    from .resolver import TreeStoreResolver
 
 # Type alias for node subscriber callbacks
 NodeSubscriberCallback = Callable[..., None]
@@ -32,7 +33,7 @@ class TreeStoreNode:
         'Alice'
     """
 
-    __slots__ = ('label', 'attr', '_value', 'parent', 'tag', '_node_subscribers')
+    __slots__ = ('label', 'attr', '_value', 'parent', 'tag', '_node_subscribers', '_resolver')
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class TreeStoreNode:
         value: Any = None,
         parent: TreeStore | None = None,
         tag: str | None = None,
+        resolver: TreeStoreResolver | None = None,
     ) -> None:
         """Initialize a TreeStoreNode.
 
@@ -50,6 +52,7 @@ class TreeStoreNode:
             value: The node's value (scalar or TreeStore for children).
             parent: The TreeStore containing this node.
             tag: Optional type/tag for the node (used by builders).
+            resolver: Optional resolver for lazy/dynamic value computation.
         """
         self.label = label
         self.attr = attr or {}
@@ -57,6 +60,9 @@ class TreeStoreNode:
         self.parent = parent
         self.tag = tag
         self._node_subscribers: dict[str, NodeSubscriberCallback] = {}
+        self._resolver: TreeStoreResolver | None = None
+        if resolver is not None:
+            self.resolver = resolver  # Use setter to set parent_node
 
     def __repr__(self) -> str:
         from .store import TreeStore
@@ -69,13 +75,31 @@ class TreeStoreNode:
 
     @property
     def value(self) -> Any:
-        """Get the node's value."""
+        """Get the node's value.
+
+        If a resolver is set, triggers resolution instead of
+        returning the stored value.
+        """
+        if self._resolver is not None:
+            return self._resolver._htraverse()
         return self._value
 
     @value.setter
     def value(self, new_value: Any) -> None:
         """Set the node's value with trigger."""
         self.set_value(new_value)
+
+    @property
+    def resolver(self) -> TreeStoreResolver | None:
+        """Get the node's resolver."""
+        return self._resolver
+
+    @resolver.setter
+    def resolver(self, resolver: TreeStoreResolver | None) -> None:
+        """Set the node's resolver, establishing parent relationship."""
+        if resolver is not None:
+            resolver.parent_node = self
+        self._resolver = resolver
 
     def set_value(
         self,

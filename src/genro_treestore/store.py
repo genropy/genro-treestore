@@ -404,17 +404,31 @@ class TreeStore:
                         raise KeyError(f"Path segment '{key}' not found")
                 node = current._nodes[key]
 
+            # If node has a resolver, resolve it to populate node._value
+            if node._resolver is not None:
+                resolver = node._resolver
+                # Check cache first
+                if resolver.cache_time != 0 and not resolver.expired:
+                    resolved = resolver._cache
+                else:
+                    resolved = resolver.load()  # smartasync handles sync/async
+                    if resolver.cache_time != 0:
+                        resolver._update_cache(resolved)
+                # Always populate node._value for traversal
+                node._value = resolved
+
             if not node.is_branch:
                 if autocreate:
                     # Convert leaf to branch
                     child_store = TreeStore(builder=current._builder)
                     child_store.parent = node
-                    node.value = child_store
+                    node._value = child_store
                 else:
                     remaining = '.'.join(parts[i+1:])
                     raise KeyError(f"'{part}' is a leaf, cannot access '{remaining}'")
 
-            current = node.value
+            # Use _value directly to avoid re-triggering resolver
+            current = node._value
 
         return current, parts[-1]
 
@@ -619,6 +633,28 @@ class TreeStore:
         """
         node = self.get_node(path)
         node.set_attr(_attributes, **kwargs)
+
+    def set_resolver(self, path: str, resolver: Any) -> None:
+        """Set a resolver on the node at the given path.
+
+        Args:
+            path: Path to the node.
+            resolver: The resolver to set.
+        """
+        node = self.get_node(path)
+        node.resolver = resolver
+
+    def get_resolver(self, path: str) -> Any:
+        """Get the resolver from the node at the given path.
+
+        Args:
+            path: Path to the node.
+
+        Returns:
+            The resolver, or None if no resolver is set.
+        """
+        node = self.get_node(path)
+        return node.resolver
 
     def del_item(self, path: str) -> TreeStoreNode:
         """Delete and return node at path.
