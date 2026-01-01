@@ -5,6 +5,9 @@
 
 A lightweight, zero-dependency library providing tree-based data structures
 for the Genro ecosystem (Genro Kyō).
+
+Parsers are available in the `parsers` subpackage:
+    >>> from genro_treestore.parsers import parse_rnc, parse_rnc_file
 """
 
 __version__ = "0.1.0"

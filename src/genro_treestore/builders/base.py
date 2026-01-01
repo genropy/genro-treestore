@@ -31,17 +31,30 @@ class BuilderBase(ABC):
     2. Using _schema dict for external/dynamic definitions:
         class HtmlBuilder(BuilderBase):
             _schema = {
-                'div': {'children': FLOW_CONTENT},
+                'div': {'children': '=flow'},
                 'br': {'leaf': True},
-                'img': {'leaf': True, 'model': ImgModel},
+                'td': {
+                    'children': '=flow',
+                    'attrs': {
+                        'colspan': {'type': 'int', 'min': 1, 'default': 1},
+                        'rowspan': {'type': 'int', 'min': 0, 'default': 1},
+                        'scope': {'type': 'enum', 'values': ['row', 'col']},
+                    }
+                },
             }
 
     Schema keys:
-        - children: str or set of allowed child tags
+        - children: str or set of allowed child tags (supports =ref)
         - leaf: True if element has no children (value='')
-        - model: Pydantic model for attribute validation
+        - attrs: dict of attribute specs for validation
+            - type: 'int', 'string', 'uri', 'bool', 'enum', 'idrefs'
+            - required: True/False (default: False)
+            - min/max: numeric constraints for int type
+            - default: default value
+            - values: list of valid values for enum type
 
     The lookup order is: decorated methods first, then _schema.
+    Attribute validation is performed with pure Python (no dependencies).
 
     Usage:
         >>> store = TreeStore(builder=MyBuilder())
@@ -53,6 +66,90 @@ class BuilderBase(ABC):
 
     # Schema dict for external element definitions (optional)
     _schema: dict[str, dict] = {}
+
+    def _validate_attrs(self, tag: str, attrs: dict[str, Any]) -> None:
+        """Validate attributes against schema specification (pure Python).
+
+        Args:
+            tag: The tag name to get attrs spec for.
+            attrs: Dict of attribute values to validate.
+
+        Raises:
+            ValueError: If validation fails.
+        """
+        schema = getattr(self, '_schema', {})
+        spec = schema.get(tag, {})
+        attrs_spec = spec.get('attrs')
+
+        if not attrs_spec:
+            return
+
+        errors = []
+
+        for attr_name, attr_spec in attrs_spec.items():
+            value = attrs.get(attr_name)
+            required = attr_spec.get('required', False)
+            type_name = attr_spec.get('type', 'string')
+
+            # Check required
+            if required and value is None:
+                errors.append(f"'{attr_name}' is required for '{tag}'")
+                continue
+
+            # Skip validation if value not provided
+            if value is None:
+                continue
+
+            # Type validation
+            if type_name == 'int':
+                if not isinstance(value, int):
+                    try:
+                        value = int(value)
+                    except (ValueError, TypeError):
+                        errors.append(
+                            f"'{attr_name}' must be an integer, got {type(value).__name__}"
+                        )
+                        continue
+
+                # Range constraints
+                min_val = attr_spec.get('min')
+                max_val = attr_spec.get('max')
+                if min_val is not None and value < min_val:
+                    errors.append(
+                        f"'{attr_name}' must be >= {min_val}, got {value}"
+                    )
+                if max_val is not None and value > max_val:
+                    errors.append(
+                        f"'{attr_name}' must be <= {max_val}, got {value}"
+                    )
+
+            elif type_name == 'bool':
+                if not isinstance(value, bool):
+                    if isinstance(value, str):
+                        if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+                            errors.append(
+                                f"'{attr_name}' must be a boolean, got '{value}'"
+                            )
+                    else:
+                        errors.append(
+                            f"'{attr_name}' must be a boolean, got {type(value).__name__}"
+                        )
+
+            elif type_name == 'enum':
+                values = attr_spec.get('values', [])
+                if values and value not in values:
+                    errors.append(
+                        f"'{attr_name}' must be one of {values}, got '{value}'"
+                    )
+
+            # string, uri, idrefs, idref, color - accept any string
+            elif type_name in ('string', 'uri', 'idrefs', 'idref', 'color'):
+                if not isinstance(value, str):
+                    # Allow conversion to string
+                    pass
+
+        if errors:
+            raise ValueError(f"Attribute validation failed for '{tag}': " + "; ".join(errors))
 
     def _resolve_ref(self, value: Any) -> Any:
         """Resolve =ref references by looking up _ref_<name> properties.
@@ -196,35 +293,22 @@ class BuilderBase(ABC):
 
         Args:
             tag: The tag name.
-            spec: Schema spec dict with keys: children, leaf, model.
-                  Values can be =references resolved via _ref_* properties.
+            spec: Schema spec dict with keys:
+                - children: str or set of allowed child tags
+                - leaf: True if element has no children
+                - attrs: dict for attribute validation
 
         Returns:
             A callable that creates the element.
         """
         is_leaf = spec.get('leaf', False)
-        model_spec = spec.get('model')
 
         # Capture self for closure
         builder = self
 
         def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
-            # Resolve model reference at call time (allows dynamic resolution)
-            model = builder._resolve_ref(model_spec)
-
-            # Validate attributes with Pydantic model if specified
-            if model is not None:
-                try:
-                    from pydantic import BaseModel
-                    if isinstance(model, type) and issubclass(model, BaseModel):
-                        model_fields = set(model.model_fields.keys())
-                        attrs_to_validate = {
-                            k: v for k, v in attr.items()
-                            if k in model_fields
-                        }
-                        model(**attrs_to_validate)
-                except ImportError:
-                    pass  # Pydantic not available
+            # Validate attributes against schema spec
+            builder._validate_attrs(tag, attr)
 
             # Determine value: user-provided > leaf default > branch (None)
             if value is None and is_leaf:

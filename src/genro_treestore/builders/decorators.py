@@ -8,20 +8,7 @@ from __future__ import annotations
 import inspect
 import re
 from functools import wraps
-from typing import Callable, Any, TYPE_CHECKING
-
-# Try to import Pydantic (optional dependency)
-try:
-    from pydantic import BaseModel, ValidationError, create_model
-    PYDANTIC_AVAILABLE = True
-except ImportError:
-    PYDANTIC_AVAILABLE = False
-    BaseModel = None  # type: ignore
-    ValidationError = None  # type: ignore
-    create_model = None  # type: ignore
-
-if TYPE_CHECKING:
-    from pydantic import BaseModel as BaseModelType
+from typing import Callable, Any, Literal, Union, get_origin, get_args
 
 # Pattern for tag with optional cardinality: tag, tag[n], tag[n:], tag[:m], tag[n:m]
 _TAG_PATTERN = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\[(\d*):?(\d*)\])?$')
@@ -78,22 +65,29 @@ def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
     return tag, min_count, max_count
 
 
-def _create_model_from_signature(func: Callable, model_name: str) -> type | None:
-    """Create a Pydantic model from function signature.
+def _extract_attrs_from_signature(func: Callable) -> dict[str, dict[str, Any]] | None:
+    """Extract attribute specs from function signature type hints.
 
-    Extracts typed parameters (excluding self, target, tag, **kwargs)
-    and creates a dynamic Pydantic model for validation.
+    Extracts typed parameters (excluding self, target, tag, label, value, **kwargs)
+    and converts them to attrs spec format for validation.
 
-    Returns None if no typed parameters found or Pydantic not available.
+    Returns None if no typed parameters found.
+
+    Example:
+        def foo(self, target, tag, colspan: int = 1, scope: Literal['row', 'col'] = None):
+            ...
+
+        Returns:
+            {
+                'colspan': {'type': 'int', 'required': False, 'default': 1},
+                'scope': {'type': 'enum', 'values': ['row', 'col'], 'required': False}
+            }
     """
-    if not PYDANTIC_AVAILABLE:
-        return None
-
     sig = inspect.signature(func)
-    fields: dict[str, Any] = {}
+    attrs_spec: dict[str, dict[str, Any]] = {}
 
     # Skip these parameters - they're not user attributes
-    skip_params = {'self', 'target', 'tag'}
+    skip_params = {'self', 'target', 'tag', 'label', 'value'}
 
     for name, param in sig.parameters.items():
         if name in skip_params:
@@ -111,70 +105,97 @@ def _create_model_from_signature(func: Callable, model_name: str) -> type | None
             # No type annotation, skip
             continue
 
+        # Convert annotation to attr spec
+        attr_spec = _annotation_to_attr_spec(annotation)
+
+        # Set required/default
         if param.default is inspect.Parameter.empty:
-            # Required field
-            fields[name] = (annotation, ...)
+            attr_spec['required'] = True
         else:
-            # Optional field with default
-            fields[name] = (annotation, param.default)
+            attr_spec['required'] = False
+            if param.default is not None:
+                attr_spec['default'] = param.default
 
-    if not fields:
-        return None
+        attrs_spec[name] = attr_spec
 
-    return create_model(model_name, **fields)
+    return attrs_spec if attrs_spec else None
 
 
-def _parse_tags_with_models(
-    tags: str | tuple
-) -> tuple[list[str], dict[str, type]]:
-    """Parse tags parameter, extracting any per-tag models.
+def _annotation_to_attr_spec(annotation: Any) -> dict[str, Any]:
+    """Convert a type annotation to attr spec dict.
+
+    Handles:
+    - int → {'type': 'int'}
+    - str → {'type': 'string'}
+    - bool → {'type': 'bool'}
+    - Literal['a', 'b'] → {'type': 'enum', 'values': ['a', 'b']}
+    - int | None → {'type': 'int'} (optional handled separately)
+    - Optional[int] → {'type': 'int'}
+    """
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    # Handle Union types (including Optional which is Union[X, None])
+    if origin is Union:
+        # Filter out NoneType
+        non_none_args = [a for a in args if a is not type(None)]
+        if len(non_none_args) == 1:
+            # Optional[X] or X | None
+            return _annotation_to_attr_spec(non_none_args[0])
+        # Multiple types - fall back to string
+        return {'type': 'string'}
+
+    # Handle Literal
+    if origin is Literal:
+        return {'type': 'enum', 'values': list(args)}
+
+    # Handle basic types
+    if annotation is int:
+        return {'type': 'int'}
+    elif annotation is bool:
+        return {'type': 'bool'}
+    elif annotation is str:
+        return {'type': 'string'}
+
+    # Default to string
+    return {'type': 'string'}
+
+
+def _parse_tags(tags: str | tuple[str, ...]) -> list[str]:
+    """Parse tags parameter into a list of tag names.
 
     Args:
         tags: Can be:
             - str: 'fridge, oven, sink'
             - tuple[str, ...]: ('fridge', 'oven', 'sink')
-            - tuple[tuple[str, type], ...]: (('fridge', FridgeModel), ('oven', OvenModel))
 
     Returns:
-        Tuple of (tag_list, tag_models_dict)
+        List of tag names.
     """
-    tag_list: list[str] = []
-    tag_models: dict[str, type] = {}
-
     if isinstance(tags, str):
-        tag_list = [t.strip() for t in tags.split(',') if t.strip()]
+        return [t.strip() for t in tags.split(',') if t.strip()]
     elif isinstance(tags, tuple) and tags:
-        # Check if it's tuple of tuples (tag, model) or tuple of strings
-        first = tags[0]
-        if isinstance(first, tuple):
-            # Tuple of (tag, model) pairs
-            for item in tags:
-                tag_name, model = item
-                tag_list.append(tag_name)
-                tag_models[tag_name] = model
-        else:
-            # Tuple of strings
-            tag_list = list(tags)
-
-    return tag_list, tag_models
+        return list(tags)
+    return []
 
 
 def element(
-    tags: str | tuple[str, ...] | tuple[tuple[str, type], ...] = '',
+    tags: str | tuple[str, ...] = '',
     children: str | tuple[str, ...] = '',
-    model: bool | type = False
+    validate: bool = True
 ) -> Callable:
     """Decorator to define element tags and validation rules for a builder method.
 
     The decorator registers the method as handler for the specified tags.
     If no tags are specified, the method name is used as the tag.
 
+    Attribute validation is automatically extracted from function signature
+    type hints when validate=True (default).
+
     Args:
         tags: Tag names this method handles. Can be:
             - A comma-separated string: 'fridge, oven, sink'
             - A tuple of strings: ('fridge', 'oven', 'sink')
-            - A tuple of (tag, Model) pairs for per-tag attribute validation:
-              (('fridge', FridgeModel), ('oven', OvenModel))
             If empty, the method name is used as the single tag.
 
         children: Valid child tag specs for structure validation. Can be:
@@ -189,11 +210,8 @@ def element(
             - 'tag[n:m]' - between n and m (inclusive)
             Empty string or empty tuple means no children allowed (leaf node).
 
-        model: Pydantic model for attribute validation (requires pydantic installed):
-            - False: no validation (default)
-            - True: auto-create model from function signature
-            - BaseModel subclass: use that model for all tags
-            Per-tag models can also be specified via tags parameter.
+        validate: If True (default), extract attribute validation rules from
+            function signature type hints. Set to False to disable validation.
 
     Example:
         >>> class MyBuilder(BuilderBase):
@@ -211,23 +229,14 @@ def element(
         ...     def item(self, target, tag, **attr):
         ...         return self.child(target, tag, value='', **attr)
         ...
-        ...     # Attribute validation from signature
-        ...     @element(model=True)
-        ...     def floor(self, target, tag, number: int = 0, **attr):
-        ...         return self.child(target, tag, number=number, **attr)
-        ...
-        ...     # Explicit Pydantic model for attributes
-        ...     @element(model=ApartmentModel)
-        ...     def apartment(self, target, tag, **attr):
-        ...         return self.child(target, tag, **attr)
-        ...
-        ...     # Per-tag attribute models
-        ...     @element(tags=(('fridge', FridgeModel), ('oven', OvenModel)))
-        ...     def appliance(self, target, tag, **attr):
-        ...         return self.child(target, tag, value='', **attr)
+        ...     # Attribute validation from signature type hints
+        ...     @element()
+        ...     def td(self, target, tag, colspan: int = 1,
+        ...            scope: Literal['row', 'col'] | None = None, **attr):
+        ...         return self.child(target, tag, colspan=colspan, scope=scope, **attr)
     """
-    # Parse tags - handle string, tuple of strings, or tuple of (tag, model) pairs
-    tag_list, tag_models = _parse_tags_with_models(tags)
+    # Parse tags
+    tag_list = _parse_tags(tags)
 
     # Check if children spec contains =references (need runtime resolution)
     children_str = children if isinstance(children, str) else ','.join(children)
@@ -248,45 +257,16 @@ def element(
             parsed_children[tag] = (min_c, max_c)
 
     def decorator(func: Callable) -> Callable:
-        # Determine validation model(s)
-        # Priority: per-tag models > explicit model > signature-based model
-        signature_model: type | None = None
-        explicit_model: type | None = None
-
-        if model is True and PYDANTIC_AVAILABLE:
-            # Create model from function signature
-            signature_model = _create_model_from_signature(func, f'{func.__name__}_Model')
-        elif model is not False and PYDANTIC_AVAILABLE:
-            # model is a BaseModel subclass
-            if isinstance(model, type) and issubclass(model, BaseModel):
-                explicit_model = model
+        # Extract attrs spec from signature if validation enabled
+        attrs_spec: dict[str, dict[str, Any]] | None = None
+        if validate:
+            attrs_spec = _extract_attrs_from_signature(func)
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Perform validation if Pydantic is available and validation is enabled
-            if PYDANTIC_AVAILABLE and (tag_models or explicit_model or signature_model):
-                # Get the tag from kwargs (injected by TreeStore dispatch)
-                current_tag = kwargs.get('tag')
-
-                # Determine which model to use
-                model_to_use: type | None = None
-                if current_tag and current_tag in tag_models:
-                    # Per-tag model has highest priority
-                    model_to_use = tag_models[current_tag]
-                elif explicit_model:
-                    model_to_use = explicit_model
-                elif signature_model:
-                    model_to_use = signature_model
-
-                if model_to_use:
-                    # Extract only the kwargs that the model knows about
-                    model_fields = set(model_to_use.model_fields.keys())
-                    attrs_to_validate = {
-                        k: v for k, v in kwargs.items()
-                        if k in model_fields
-                    }
-                    # Validate - will raise ValidationError if invalid
-                    model_to_use(**attrs_to_validate)
+            # Perform validation if attrs_spec is defined
+            if attrs_spec:
+                _validate_attrs_from_spec(attrs_spec, kwargs)
 
             return func(*args, **kwargs)
 
@@ -306,13 +286,72 @@ def element(
         # If no tags specified, will use method name (set in __init_subclass__)
         wrapper._element_tags = tuple(tag_list) if tag_list else None
 
-        # Store validation info for introspection
-        wrapper._validation_model = explicit_model or signature_model
-        wrapper._tag_models = tag_models if tag_models else None
+        # Store attrs spec for introspection
+        wrapper._attrs_spec = attrs_spec
 
         return wrapper
 
     return decorator
+
+
+def _validate_attrs_from_spec(attrs_spec: dict[str, dict[str, Any]], kwargs: dict[str, Any]) -> None:
+    """Validate kwargs against attrs spec extracted from signature.
+
+    Args:
+        attrs_spec: Dict mapping attr name to spec dict with type, required, values, etc.
+        kwargs: The keyword arguments to validate.
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    errors = []
+
+    for attr_name, attr_spec in attrs_spec.items():
+        value = kwargs.get(attr_name)
+        required = attr_spec.get('required', False)
+        type_name = attr_spec.get('type', 'string')
+
+        # Check required
+        if required and value is None:
+            errors.append(f"'{attr_name}' is required")
+            continue
+
+        # Skip validation if value not provided
+        if value is None:
+            continue
+
+        # Type validation
+        if type_name == 'int':
+            if not isinstance(value, int):
+                try:
+                    int(value)
+                except (ValueError, TypeError):
+                    errors.append(
+                        f"'{attr_name}' must be an integer, got {type(value).__name__}"
+                    )
+                    continue
+
+        elif type_name == 'bool':
+            if not isinstance(value, bool):
+                if isinstance(value, str):
+                    if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+                        errors.append(
+                            f"'{attr_name}' must be a boolean, got '{value}'"
+                        )
+                else:
+                    errors.append(
+                        f"'{attr_name}' must be a boolean, got {type(value).__name__}"
+                    )
+
+        elif type_name == 'enum':
+            values = attr_spec.get('values', [])
+            if values and value not in values:
+                errors.append(
+                    f"'{attr_name}' must be one of {values}, got '{value}'"
+                )
+
+    if errors:
+        raise ValueError("Attribute validation failed: " + "; ".join(errors))
 
 
 # Alias for backwards compatibility
