@@ -137,9 +137,7 @@ class BuilderBase(ABC):
                             "yes",
                             "no",
                         ):
-                            errors.append(
-                                f"'{attr_name}' must be a boolean, got '{value}'"
-                            )
+                            errors.append(f"'{attr_name}' must be a boolean, got '{value}'")
                     else:
                         errors.append(
                             f"'{attr_name}' must be a boolean, got {type(value).__name__}"
@@ -148,9 +146,7 @@ class BuilderBase(ABC):
             elif type_name == "enum":
                 values = attr_spec.get("values", [])
                 if values and value not in values:
-                    errors.append(
-                        f"'{attr_name}' must be one of {values}, got '{value}'"
-                    )
+                    errors.append(f"'{attr_name}' must be one of {values}, got '{value}'")
 
             # string, uri, idrefs, idref, color - accept any string
             elif type_name in ("string", "uri", "idrefs", "idref", "color"):
@@ -159,9 +155,7 @@ class BuilderBase(ABC):
                     pass
 
         if errors and raise_on_error:
-            raise ValueError(
-                f"Attribute validation failed for '{tag}': " + "; ".join(errors)
-            )
+            raise ValueError(f"Attribute validation failed for '{tag}': " + "; ".join(errors))
 
         return errors
 
@@ -212,9 +206,7 @@ class BuilderBase(ABC):
                     resolved.update(resolved_item)
                 elif isinstance(resolved_item, str):
                     # Could be comma-separated string
-                    resolved.update(
-                        t.strip() for t in resolved_item.split(",") if t.strip()
-                    )
+                    resolved.update(t.strip() for t in resolved_item.split(",") if t.strip())
                 else:
                     resolved.add(resolved_item)
             return frozenset(resolved) if isinstance(value, frozenset) else resolved
@@ -249,8 +241,7 @@ class BuilderBase(ABC):
                 return self._resolve_ref(resolved)
 
             raise ValueError(
-                f"Reference '{value}' not found: "
-                f"no '{prop_name}' property on {type(self).__name__}"
+                f"Reference '{value}' not found: no '{prop_name}' property on {type(self).__name__}"
             )
 
         return value
@@ -285,9 +276,7 @@ class BuilderBase(ABC):
     def __getattr__(self, name: str) -> Any:
         """Look up tag in _element_tags or _schema and return handler."""
         if name.startswith("_"):
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
         # First, check decorated methods
         element_tags = getattr(type(self), "_element_tags", {})
@@ -320,9 +309,7 @@ class BuilderBase(ABC):
         # Capture self for closure
         builder = self
 
-        def handler(
-            target, tag: str = tag, label: str | None = None, value=None, **attr
-        ):
+        def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
             # Validation is handled by ValidationSubscriber after node creation
             # Determine value: user-provided > leaf default > branch (None)
             if value is None and is_leaf:
@@ -335,8 +322,8 @@ class BuilderBase(ABC):
         if children_spec is not None:
             # Store raw spec - will be resolved in _parse_children_spec
             handler._raw_children_spec = children_spec
-            handler._valid_children, handler._child_cardinality = (
-                self._parse_children_spec(children_spec)
+            handler._valid_children, handler._child_cardinality = self._parse_children_spec(
+                children_spec
             )
         else:
             # No children spec = leaf element (no children allowed)
@@ -479,9 +466,7 @@ class BuilderBase(ABC):
 
         return None, {}
 
-    def check(
-        self, store: TreeStore, parent_tag: str | None = None, path: str = ""
-    ) -> list[str]:
+    def check(self, store: TreeStore, parent_tag: str | None = None, path: str = "") -> list[str]:
         """Check the TreeStore structure against this builder's rules.
 
         Checks structure rules defined via @element(children=...) decorator:
@@ -527,9 +512,7 @@ class BuilderBase(ABC):
 
             # Recursively check branch children
             if not node.is_leaf:
-                child_errors = self.check(
-                    node.value, parent_tag=child_tag, path=node_path
-                )
+                child_errors = self.check(node.value, parent_tag=child_tag, path=node_path)
                 errors.extend(child_errors)
 
         # Check per-tag cardinality constraints
@@ -538,13 +521,11 @@ class BuilderBase(ABC):
 
             if min_count > 0 and actual < min_count:
                 errors.append(
-                    f"'{parent_tag}' requires at least {min_count} '{tag}', "
-                    f"but has {actual}"
+                    f"'{parent_tag}' requires at least {min_count} '{tag}', but has {actual}"
                 )
             if max_count is not None and actual > max_count:
                 errors.append(
-                    f"'{parent_tag}' allows at most {max_count} '{tag}', "
-                    f"but has {actual}"
+                    f"'{parent_tag}' allows at most {max_count} '{tag}', but has {actual}"
                 )
 
         return errors

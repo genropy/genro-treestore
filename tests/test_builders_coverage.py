@@ -55,6 +55,7 @@ class TestAnnotationToAttrSpec:
     def test_union_multiple_types(self):
         """Test Union with multiple non-None types falls back to string."""
         from typing import Union
+
         result = _annotation_to_attr_spec(Union[int, str])
         assert result == {"type": "string"}
 
@@ -69,46 +70,58 @@ class TestExtractAttrsFromSignature:
 
     def test_skip_var_positional(self):
         """Test that *args is skipped."""
+
         def func(self, target, tag, *args, x: int = 1):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert "args" not in result
         assert "x" in result
 
     def test_no_typed_params_returns_none(self):
         """Test function with no typed params returns None."""
+
         def func(self, target, tag, **kwargs):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result is None
 
     def test_literal_annotation(self):
         """Test Literal annotation creates enum type."""
-        def func(scope: Literal['row', 'col'] = None):
+
+        def func(scope: Literal["row", "col"] = None):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["scope"]["type"] == "enum"
-        assert result["scope"]["values"] == ['row', 'col']
+        assert result["scope"]["values"] == ["row", "col"]
 
     def test_required_param(self):
         """Test parameter without default is marked required."""
+
         def func(required_param: int):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["required_param"]["required"] is True
 
     def test_optional_with_default(self):
         """Test parameter with default is not required."""
+
         def func(optional_param: int = 42):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["optional_param"]["required"] is False
         assert result["optional_param"]["default"] == 42
 
     def test_param_without_annotation_skipped(self):
         """Test parameter without type annotation is skipped (line 106)."""
+
         def func(self, target, tag, untyped_param, typed_param: int = 1):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert "untyped_param" not in result
         assert "typed_param" in result
@@ -116,22 +129,28 @@ class TestExtractAttrsFromSignature:
     def test_optional_type_annotation(self):
         """Test Optional[X] annotation extracts inner type (line 144)."""
         from typing import Optional
+
         def func(opt_int: Optional[int] = None):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["opt_int"]["type"] == "int"
 
     def test_bool_annotation(self):
         """Test bool annotation creates bool type (line 156)."""
+
         def func(flag: bool = False):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["flag"]["type"] == "bool"
 
     def test_str_annotation(self):
         """Test str annotation creates string type (line 158)."""
+
         def func(name: str = "default"):
             pass
+
         result = _extract_attrs_from_signature(func)
         assert result["name"]["type"] == "string"
 
@@ -181,14 +200,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_required_attr_missing(self):
         """Test required attribute missing raises."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "name": {"type": "string", "required": True}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"name": {"type": "string", "required": True}}}}
 
         builder = TestBuilder()
         with pytest.raises(ValueError, match="'name' is required"):
@@ -196,14 +210,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_int_conversion_failure(self):
         """Test int conversion failure."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "count": {"type": "int"}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"count": {"type": "int"}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"count": "not_int"}, raise_on_error=False)
@@ -211,14 +220,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_int_min_violation(self):
         """Test int min constraint violation."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "count": {"type": "int", "min": 1}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"count": {"type": "int", "min": 1}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"count": 0}, raise_on_error=False)
@@ -226,14 +230,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_int_max_violation(self):
         """Test int max constraint violation."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "count": {"type": "int", "max": 10}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"count": {"type": "int", "max": 10}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"count": 100}, raise_on_error=False)
@@ -241,14 +240,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_bool_invalid_string(self):
         """Test bool invalid string."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "flag": {"type": "bool"}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"flag": {"type": "bool"}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"flag": "maybe"}, raise_on_error=False)
@@ -256,14 +250,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_bool_invalid_type(self):
         """Test bool invalid type (not string)."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "flag": {"type": "bool"}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"flag": {"type": "bool"}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"flag": 42}, raise_on_error=False)
@@ -271,14 +260,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_enum_invalid_value(self):
         """Test enum invalid value."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "color": {"type": "enum", "values": ["red", "green"]}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"color": {"type": "enum", "values": ["red", "green"]}}}}
 
         builder = TestBuilder()
         errors = builder._validate_attrs("item", {"color": "blue"}, raise_on_error=False)
@@ -286,14 +270,9 @@ class TestBuilderBaseValidateAttrs:
 
     def test_validate_string_type_accepts_non_string(self):
         """Test string type accepts any value (converted)."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {
-                    "attrs": {
-                        "name": {"type": "string"}
-                    }
-                }
-            }
+            _schema = {"item": {"attrs": {"name": {"type": "string"}}}}
 
         builder = TestBuilder()
         # Non-string should be accepted (will be converted)
@@ -306,6 +285,7 @@ class TestBuilderBaseResolveRef:
 
     def test_resolve_ref_set_with_mixed_refs(self):
         """Test resolving set with mixed refs and literals."""
+
         class TestBuilder(BuilderBase):
             @property
             def _ref_items(self):
@@ -321,6 +301,7 @@ class TestBuilderBaseResolveRef:
 
     def test_resolve_ref_frozenset(self):
         """Test resolving frozenset with refs."""
+
         class TestBuilder(BuilderBase):
             @property
             def _ref_items(self):
@@ -335,6 +316,7 @@ class TestBuilderBaseResolveRef:
 
     def test_resolve_ref_comma_with_non_string_result(self):
         """Test resolving comma string when ref returns non-string."""
+
         class TestBuilder(BuilderBase):
             @property
             def _ref_num(self):
@@ -347,6 +329,7 @@ class TestBuilderBaseResolveRef:
 
     def test_resolve_ref_not_found_raises(self):
         """Test reference not found raises ValueError."""
+
         class TestBuilder(BuilderBase):
             pass
 
@@ -368,6 +351,7 @@ class TestBuilderBaseGetattr:
 
     def test_getattr_from_element_tags(self):
         """Test accessing tag from _element_tags."""
+
         class TestBuilder(BuilderBase):
             @element(tags="foo")
             def bar(self, target, tag, **attr):
@@ -379,6 +363,7 @@ class TestBuilderBaseGetattr:
 
     def test_getattr_not_found_raises(self):
         """Test accessing unknown element raises AttributeError."""
+
         class TestBuilder(BuilderBase):
             pass
 
@@ -392,10 +377,9 @@ class TestBuilderBaseMakeSchemaHandler:
 
     def test_schema_handler_leaf_element(self):
         """Test schema handler for leaf element."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "br": {"leaf": True}
-            }
+            _schema = {"br": {"leaf": True}}
 
         store = TreeStore(builder=TestBuilder())
         node = store.br()
@@ -403,10 +387,9 @@ class TestBuilderBaseMakeSchemaHandler:
 
     def test_schema_handler_no_children_spec(self):
         """Test schema handler with no children spec."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "item": {}
-            }
+            _schema = {"item": {}}
 
         builder = TestBuilder()
         handler = builder._make_schema_handler("item", {})
@@ -419,6 +402,7 @@ class TestBuilderBaseParseChildrenSpec:
 
     def test_parse_set_spec(self):
         """Test parsing set spec returns frozenset."""
+
         class TestBuilder(BuilderBase):
             pass
 
@@ -433,10 +417,9 @@ class TestBuilderBaseGetValidationRules:
 
     def test_get_rules_from_schema(self):
         """Test getting rules from _schema."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "container": {"children": "item[1:3]"}
-            }
+            _schema = {"container": {"children": "item[1:3]"}}
 
         builder = TestBuilder()
         valid, cardinality = builder._get_validation_rules("container")
@@ -445,10 +428,9 @@ class TestBuilderBaseGetValidationRules:
 
     def test_get_rules_schema_no_children(self):
         """Test schema element with no children spec."""
+
         class TestBuilder(BuilderBase):
-            _schema = {
-                "leaf": {"leaf": True}
-            }
+            _schema = {"leaf": {"leaf": True}}
 
         builder = TestBuilder()
         valid, cardinality = builder._get_validation_rules("leaf")
@@ -461,6 +443,7 @@ class TestBuilderBaseCheck:
 
     def test_check_invalid_child_tag_no_valid_children(self):
         """Test check with invalid child when no valid children allowed."""
+
         class TestBuilder(BuilderBase):
             @element(children="")  # No children allowed
             def container(self, target, tag, **attr):
@@ -475,6 +458,7 @@ class TestBuilderBaseCheck:
 
     def test_check_cardinality_min_violation(self):
         """Test check with min cardinality violation."""
+
         class TestBuilder(BuilderBase):
             @element(children="item[2:]")  # At least 2 required
             def container(self, target, tag, **attr):
@@ -493,6 +477,7 @@ class TestBuilderBaseCheck:
 
     def test_check_cardinality_max_violation(self):
         """Test check with max cardinality violation (using check method directly)."""
+
         class TestBuilder(BuilderBase):
             @element(children="item[:1]")  # At most 1 allowed
             def container(self, target, tag, **attr):
@@ -506,6 +491,7 @@ class TestBuilderBaseCheck:
         store = TreeStore()
         container_store = TreeStore()
         from genro_treestore.store.node import TreeStoreNode
+
         container_node = TreeStoreNode("container_0", {}, value=container_store, tag="container")
         container_store.parent = container_node
         store._insert_node(container_node, trigger=False)
@@ -522,6 +508,7 @@ class TestBuilderBaseCheck:
 
     def test_check_recursive_with_branches(self):
         """Test check recursively validates branches."""
+
         class TestBuilder(BuilderBase):
             @element(children="inner")
             def outer(self, target, tag, **attr):
@@ -545,6 +532,7 @@ class TestElementDecorator:
 
     def test_element_with_refs_in_children(self):
         """Test element decorator with =refs in children."""
+
         class TestBuilder(BuilderBase):
             @property
             def _ref_items(self):
@@ -560,6 +548,7 @@ class TestElementDecorator:
 
     def test_element_with_tuple_children(self):
         """Test element decorator with tuple children."""
+
         class TestBuilder(BuilderBase):
             @element(children=("a", "b", "c"))
             def container(self, target, tag, **attr):
@@ -571,6 +560,7 @@ class TestElementDecorator:
 
     def test_element_validates_attrs_at_call_time(self):
         """Test element decorator validates attrs when called."""
+
         class TestBuilder(BuilderBase):
             @element()
             def item(self, target, tag, count: int = 1, **attr):
@@ -618,7 +608,7 @@ class TestHtmlPage:
         html = page.to_html()
         assert "<!DOCTYPE html>" in html
         assert "<title>Test Page</title>" in html
-        assert "<meta charset=\"utf-8\">" in html
+        assert '<meta charset="utf-8">' in html
 
     def test_html_page_to_html_with_filename(self, tmp_path):
         """Test saving HtmlPage to file."""
@@ -690,6 +680,7 @@ class TestInitSubclass:
 
     def test_init_subclass_inherits_parent_tags(self):
         """Test that subclass inherits parent's element tags."""
+
         class ParentBuilder(BuilderBase):
             @element(tags="parent_tag")
             def parent_method(self, target, tag, **attr):
@@ -705,6 +696,7 @@ class TestInitSubclass:
 
     def test_init_subclass_method_without_explicit_tags(self):
         """Test method decorated with @element but no explicit tags uses method name."""
+
         class TestBuilder(BuilderBase):
             @element()
             def my_element(self, target, tag, **attr):
@@ -718,6 +710,7 @@ class TestBuilderChild:
 
     def test_child_with_builder_override(self):
         """Test child with _builder override."""
+
         class Builder1(BuilderBase):
             @element()
             def container(self, target, tag, **attr):
@@ -741,6 +734,7 @@ class TestBuilderChild:
 
     def test_child_auto_label_increments(self):
         """Test auto-labeling increments correctly."""
+
         class TestBuilder(BuilderBase):
             @element()
             def item(self, target, tag, **attr):

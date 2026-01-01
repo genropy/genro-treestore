@@ -225,9 +225,7 @@ class RncBuilder(BuilderBase):
                         self._elements.add(tag)
                     elif child_type == "ref":
                         # Reference - will be resolved later
-                        ref = (
-                            child.value if isinstance(child.value, str) else child.label
-                        )
+                        ref = child.value if isinstance(child.value, str) else child.label
                         elements.add(f"={ref}")
 
                 if elements:
@@ -431,9 +429,7 @@ class RncBuilder(BuilderBase):
             f"Valid elements: {', '.join(sorted(self._elements)[:10])}..."
         )
 
-    def _make_element_method(
-        self, name: str
-    ) -> Callable[..., TreeStore | TreeStoreNode]:
+    def _make_element_method(self, name: str) -> Callable[..., TreeStore | TreeStoreNode]:
         """Create a method for a specific element.
 
         Args:
@@ -477,9 +473,7 @@ class RncBuilder(BuilderBase):
                     resolved.update(resolved_item)
                 elif isinstance(resolved_item, str):
                     # Could be comma-separated string
-                    resolved.update(
-                        t.strip() for t in resolved_item.split(",") if t.strip()
-                    )
+                    resolved.update(t.strip() for t in resolved_item.split(",") if t.strip())
                 else:
                     resolved.add(resolved_item)
             return frozenset(resolved) if isinstance(value, frozenset) else resolved

@@ -246,9 +246,7 @@ def from_tytx(
 
         # Resolve parent path from code if compact format
         if code_to_path is not None:
-            parent_path = (
-                code_to_path.get(parent_ref, "") if parent_ref is not None else ""
-            )
+            parent_path = code_to_path.get(parent_ref, "") if parent_ref is not None else ""
         else:
             parent_path = parent_ref
 

@@ -436,9 +436,7 @@ class TreeStoreResolver:
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}("
-            f"cache_time={self.cache_time}, "
-            f"read_only={self.read_only})"
+            f"{self.__class__.__name__}(cache_time={self.cache_time}, read_only={self.read_only})"
         )
 
 
@@ -522,4 +520,4 @@ class CallbackResolver(TreeStoreResolver):
 
     def __repr__(self) -> str:
         callback_name = getattr(self.callback, "__name__", repr(self.callback))
-        return f"CallbackResolver({callback_name}, " f"cache_time={self.cache_time})"
+        return f"CallbackResolver({callback_name}, cache_time={self.cache_time})"

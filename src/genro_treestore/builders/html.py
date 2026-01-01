@@ -455,9 +455,7 @@ class HtmlPage:
     def _node_to_html(self, node: TreeStoreNode, indent: int = 0) -> str:
         """Recursively convert a node to HTML."""
         tag = node.tag or node.label
-        attrs = " ".join(
-            f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_")
-        )
+        attrs = " ".join(f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_"))
         attrs_str = f" {attrs}" if attrs else ""
         spaces = "  " * indent
 
@@ -481,9 +479,7 @@ class HtmlPage:
         lines.append(f"{spaces}</{tag}>")
         return "\n".join(lines)
 
-    def to_html(
-        self, filename: str | None = None, output_dir: str | None = None
-    ) -> str:
+    def to_html(self, filename: str | None = None, output_dir: str | None = None) -> str:
         """Generate complete HTML.
 
         Args:
@@ -537,8 +533,6 @@ class HtmlPage:
             indent_level = "  " * path.count(".")
             tag = node.tag or node.label
             value_str = f': "{node.value}"' if node.is_leaf and node.value else ""
-            attrs = " ".join(
-                f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_")
-            )
+            attrs = " ".join(f'{k}="{v}"' for k, v in node.attr.items() if not k.startswith("_"))
             attrs_str = f" [{attrs}]" if attrs else ""
             print(f"{indent_level}<{tag}{attrs_str}>{value_str}")

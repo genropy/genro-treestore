@@ -581,9 +581,7 @@ class RncParser:
                 if self.peek().type == TokenType.LITERAL:
                     params = self.advance().value
                 return keyword, (
-                    {"_type": "datatype", "_params": params}
-                    if params
-                    else {"_type": "datatype"}
+                    {"_type": "datatype", "_params": params} if params else {"_type": "datatype"}
                 )
             else:
                 return keyword, {"_type": "keyword"}
@@ -606,9 +604,7 @@ class RncParser:
                     result_attrs["_dt_params"] = dt_params
                 return cname, result_attrs
             return cname, (
-                {"_type": "datatype", "_params": params}
-                if params
-                else {"_type": "datatype"}
+                {"_type": "datatype", "_params": params} if params else {"_type": "datatype"}
             )
 
         # Literal string
@@ -660,9 +656,7 @@ class RncParser:
     def _parse_datatype_params(self) -> dict:
         """Parse datatype parameters: { param = value, ... }"""
         params = {}
-        while (
-            self.peek().type != TokenType.RBRACE and self.peek().type != TokenType.EOF
-        ):
+        while self.peek().type != TokenType.RBRACE and self.peek().type != TokenType.EOF:
             # Expect: name = value
             if self.peek().type in (TokenType.ID, TokenType.KEYWORD):
                 name = self.advance().value
@@ -736,9 +730,7 @@ class RncParser:
 
             self.expect(TokenType.RPAREN)
 
-            result_name = (
-                "|".join(names) if len(names) > 1 else (names[0] if names else "")
-            )
+            result_name = "|".join(names) if len(names) > 1 else (names[0] if names else "")
             result_attrs = {"_name_choice": True} if len(names) > 1 else {}
 
             # Check for subtraction after group

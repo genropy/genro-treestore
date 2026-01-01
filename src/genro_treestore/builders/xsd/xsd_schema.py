@@ -63,9 +63,7 @@ class XsdBuilder(BuilderBase):
         # Find schema root (xs:schema)
         schema_node = None
         for node in self._schema_store.nodes():
-            if node.attr.get("_tag", "").endswith(":schema") or node.label.startswith(
-                "schema"
-            ):
+            if node.attr.get("_tag", "").endswith(":schema") or node.label.startswith("schema"):
                 schema_node = node
                 break
 
@@ -174,18 +172,14 @@ class XsdBuilder(BuilderBase):
                 elem_name = name or ref
                 if elem_name:
                     # Strip namespace prefix
-                    elem_name = (
-                        elem_name.split(":")[-1] if ":" in elem_name else elem_name
-                    )
+                    elem_name = elem_name.split(":")[-1] if ":" in elem_name else elem_name
                     children.add(elem_name)
 
                     # Register element if not already known
                     if elem_name not in self._elements:
                         spec: dict[str, Any] = {}
                         if type_ref:
-                            type_name = (
-                                type_ref.split(":")[-1] if ":" in type_ref else type_ref
-                            )
+                            type_name = type_ref.split(":")[-1] if ":" in type_ref else type_ref
                             spec["type"] = type_name
                         # Check for inline complexType
                         if child.is_branch:
@@ -217,9 +211,7 @@ class XsdBuilder(BuilderBase):
             f"Valid elements: {', '.join(sorted(self._elements.keys())[:10])}..."
         )
 
-    def _make_element_method(
-        self, name: str
-    ) -> Callable[..., "TreeStore | TreeStoreNode"]:
+    def _make_element_method(self, name: str) -> Callable[..., "TreeStore | TreeStoreNode"]:
         """Create a method for a specific element."""
         spec = self._elements.get(name, {})
         children = spec.get("children", set())

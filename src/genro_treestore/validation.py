@@ -95,9 +95,7 @@ class ValidationSubscriber:
         """
         # Clear previous attribute errors (keep cardinality errors on parent)
         node._invalid_reasons = [
-            e
-            for e in node._invalid_reasons
-            if e.startswith("requires ") or e.startswith("allows ")
+            e for e in node._invalid_reasons if e.startswith("requires ") or e.startswith("allows ")
         ]
 
         if self.builder is None:
@@ -150,9 +148,7 @@ class ValidationSubscriber:
             actual = child_counts.get(tag, 0)
             # SOFT error: missing children - never raise
             if min_count > 0 and actual < min_count:
-                cardinality_errors.append(
-                    f"requires at least {min_count} '{tag}', has {actual}"
-                )
+                cardinality_errors.append(f"requires at least {min_count} '{tag}', has {actual}")
             # HARD error: too many children - raise if raise_on_error
             if max_count is not None and actual > max_count:
                 error_msg = f"allows at most {max_count} '{tag}', has {actual}"
@@ -170,6 +166,5 @@ class ValidationSubscriber:
         # Raise for hard errors if raise_on_error is True
         if hard_errors and self._raise_on_error:
             raise ValueError(
-                f"Cardinality constraint violated for '{parent_tag}': "
-                + "; ".join(hard_errors)
+                f"Cardinality constraint violated for '{parent_tag}': " + "; ".join(hard_errors)
             )

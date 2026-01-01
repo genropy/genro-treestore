@@ -15,27 +15,27 @@ from genro_treestore.builders.decorators import element
 class TableBuilder(BuilderBase):
     """Builder for table elements with cardinality constraints."""
 
-    @element(children='tr[1:]')  # At least 1 tr required
+    @element(children="tr[1:]")  # At least 1 tr required
     def thead(self, target, tag, **attr):
         return self.child(target, tag, **attr)
 
-    @element(children='tr')  # Any number of tr
+    @element(children="tr")  # Any number of tr
     def tbody(self, target, tag, **attr):
         return self.child(target, tag, **attr)
 
-    @element(children='th, td')  # th or td children
+    @element(children="th, td")  # th or td children
     def tr(self, target, tag, **attr):
         return self.child(target, tag, **attr)
 
     @element()  # Leaf element
-    def th(self, target, tag, value='', **attr):
+    def th(self, target, tag, value="", **attr):
         return self.child(target, tag, value=value, **attr)
 
     @element()  # Leaf element
-    def td(self, target, tag, value='', **attr):
+    def td(self, target, tag, value="", **attr):
         return self.child(target, tag, value=value, **attr)
 
-    @element(children='thead[1], tbody[1]')  # Exactly 1 thead and 1 tbody
+    @element(children="thead[1], tbody[1]")  # Exactly 1 thead and 1 tbody
     def table(self, target, tag, **attr):
         return self.child(target, tag, **attr)
 
@@ -44,18 +44,18 @@ class FormBuilder(BuilderBase):
     """Builder with attribute validation via schema."""
 
     _schema = {
-        'input': {
-            'leaf': True,
-            'attrs': {
-                'type': {'type': 'enum', 'values': ['text', 'number', 'email'], 'required': True},
-                'maxlength': {'type': 'int', 'min': 1, 'max': 1000},
-            }
+        "input": {
+            "leaf": True,
+            "attrs": {
+                "type": {"type": "enum", "values": ["text", "number", "email"], "required": True},
+                "maxlength": {"type": "int", "min": 1, "max": 1000},
+            },
         },
-        'select': {
-            'children': 'option[1:]',  # At least 1 option required
+        "select": {
+            "children": "option[1:]",  # At least 1 option required
         },
-        'option': {
-            'leaf': True,
+        "option": {
+            "leaf": True,
         },
     }
 
@@ -65,19 +65,19 @@ class TestNodeInvalidReasons:
 
     def test_node_has_invalid_reasons_attribute(self):
         """Node should have _invalid_reasons list."""
-        node = TreeStoreNode('test', {}, 'value')
-        assert hasattr(node, '_invalid_reasons')
+        node = TreeStoreNode("test", {}, "value")
+        assert hasattr(node, "_invalid_reasons")
         assert node._invalid_reasons == []
 
     def test_node_is_valid_when_no_errors(self):
         """Node.is_valid should be True when no errors."""
-        node = TreeStoreNode('test', {}, 'value')
+        node = TreeStoreNode("test", {}, "value")
         assert node.is_valid is True
 
     def test_node_is_invalid_when_has_errors(self):
         """Node.is_valid should be False when has errors."""
-        node = TreeStoreNode('test', {}, 'value')
-        node._invalid_reasons.append('test error')
+        node = TreeStoreNode("test", {}, "value")
+        node._invalid_reasons.append("test error")
         assert node.is_valid is False
 
 
@@ -90,7 +90,7 @@ class TestReactiveValidationCardinality:
         store.thead()
 
         # thead node should have cardinality error
-        thead_node = store.get_node('thead_0')
+        thead_node = store.get_node("thead_0")
         assert not thead_node.is_valid
         assert any("requires at least 1 'tr'" in e for e in thead_node._invalid_reasons)
 
@@ -98,7 +98,7 @@ class TestReactiveValidationCardinality:
         """thead should become valid after adding required tr."""
         store = TreeStore(builder=TableBuilder())
         thead = store.thead()
-        thead_node = store.get_node('thead_0')
+        thead_node = store.get_node("thead_0")
 
         # Initially invalid
         assert not thead_node.is_valid
@@ -116,11 +116,11 @@ class TestReactiveValidationCardinality:
         thead = store.thead()
         thead.tr()
 
-        thead_node = store.get_node('thead_0')
+        thead_node = store.get_node("thead_0")
         assert thead_node.is_valid
 
         # Delete the tr
-        thead.del_item('tr_0')
+        thead.del_item("tr_0")
 
         # Now invalid again
         assert not thead_node.is_valid
@@ -131,7 +131,7 @@ class TestReactiveValidationCardinality:
         store = TreeStore(builder=TableBuilder())
         store.table()
 
-        table_node = store.get_node('table_0')
+        table_node = store.get_node("table_0")
         # Should be invalid - missing thead and tbody
         assert not table_node.is_valid
         assert any("requires at least 1 'thead'" in e for e in table_node._invalid_reasons)
@@ -142,7 +142,7 @@ class TestReactiveValidationCardinality:
         store = TreeStore(builder=TableBuilder())
         store.tbody()
 
-        tbody_node = store.get_node('tbody_0')
+        tbody_node = store.get_node("tbody_0")
         # Should be valid even without tr (no min constraint)
         assert tbody_node.is_valid
 
@@ -160,33 +160,33 @@ class TestReactiveValidationAttributes:
         # input requires 'type' attribute
         store.input()
 
-        input_node = store.get_node('input_0')
+        input_node = store.get_node("input_0")
         assert not input_node.is_valid
         assert any("'type' is required" in e for e in input_node._invalid_reasons)
 
     def test_valid_required_attribute(self):
         """Valid required attribute should not add error."""
         store = TreeStore(builder=FormBuilder(), raise_on_error=False)
-        store.input(type='text')
+        store.input(type="text")
 
-        input_node = store.get_node('input_0')
+        input_node = store.get_node("input_0")
         assert input_node.is_valid
 
     def test_invalid_enum_attribute(self):
         """Invalid enum value should add error."""
         store = TreeStore(builder=FormBuilder(), raise_on_error=False)
-        store.input(type='invalid_type')
+        store.input(type="invalid_type")
 
-        input_node = store.get_node('input_0')
+        input_node = store.get_node("input_0")
         assert not input_node.is_valid
         assert any("must be one of" in e for e in input_node._invalid_reasons)
 
     def test_integer_min_constraint(self):
         """Integer below min should add error."""
         store = TreeStore(builder=FormBuilder(), raise_on_error=False)
-        store.input(type='text', maxlength=0)  # min is 1
+        store.input(type="text", maxlength=0)  # min is 1
 
-        input_node = store.get_node('input_0')
+        input_node = store.get_node("input_0")
         assert not input_node.is_valid
         assert any("must be >= 1" in e for e in input_node._invalid_reasons)
 
@@ -199,7 +199,7 @@ class TestStoreValidation:
         store = TreeStore(builder=TableBuilder())
         tbody = store.tbody()
         tr = tbody.tr()
-        tr.td(value='cell')
+        tr.td(value="cell")
 
         assert store.is_valid
 
@@ -216,8 +216,8 @@ class TestStoreValidation:
         store.thead()  # Missing required tr
 
         errors = store.validation_errors()
-        assert 'thead_0' in errors
-        assert len(errors['thead_0']) > 0
+        assert "thead_0" in errors
+        assert len(errors["thead_0"]) > 0
 
     def test_validation_errors_empty_when_valid(self):
         """validation_errors() should return empty dict when valid."""
@@ -261,7 +261,7 @@ class TestRaiseOnErrorParameter:
         store.input()  # Missing required 'type' attribute
 
         # But errors should still be collected
-        input_node = store.get_node('input_0')
+        input_node = store.get_node("input_0")
         assert not input_node.is_valid
         assert any("'type' is required" in e for e in input_node._invalid_reasons)
 
@@ -280,7 +280,7 @@ class TestSelectOptionCardinality:
         store = TreeStore(builder=FormBuilder())
         store.select()
 
-        select_node = store.get_node('select_0')
+        select_node = store.get_node("select_0")
         assert not select_node.is_valid
         assert any("requires at least 1 'option'" in e for e in select_node._invalid_reasons)
 
@@ -288,22 +288,22 @@ class TestSelectOptionCardinality:
         """select should be valid after adding option."""
         store = TreeStore(builder=FormBuilder())
         select = store.select()
-        select.option(value='Choice 1')
+        select.option(value="Choice 1")
 
-        select_node = store.get_node('select_0')
+        select_node = store.get_node("select_0")
         assert select_node.is_valid
 
     def test_select_invalid_after_removing_last_option(self):
         """select should become invalid after removing last option."""
         store = TreeStore(builder=FormBuilder())
         select = store.select()
-        select.option(value='Choice 1')
+        select.option(value="Choice 1")
 
-        select_node = store.get_node('select_0')
+        select_node = store.get_node("select_0")
         assert select_node.is_valid
 
         # Remove the option
-        select.del_item('option_0')
+        select.del_item("option_0")
 
         assert not select_node.is_valid
         assert any("requires at least 1 'option'" in e for e in select_node._invalid_reasons)

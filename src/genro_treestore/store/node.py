@@ -164,9 +164,7 @@ class TreeStoreNode:
 
             # Notify parent store
             if self.parent is not None:
-                self.parent._on_node_changed(
-                    self, [self.label], "upd_value", oldvalue, reason
-                )
+                self.parent._on_node_changed(self, [self.label], "upd_value", oldvalue, reason)
 
     @property
     def is_branch(self) -> bool:
@@ -233,18 +231,14 @@ class TreeStoreNode:
             # Notify node subscribers
             if self._node_subscribers:
                 changed_attrs = [
-                    k
-                    for k in self.attr
-                    if k not in oldattr or self.attr[k] != oldattr[k]
+                    k for k in self.attr if k not in oldattr or self.attr[k] != oldattr[k]
                 ]
                 for callback in self._node_subscribers.values():
                     callback(node=self, info=changed_attrs, evt="upd_attr")
 
             # Notify parent store
             if self.parent is not None:
-                self.parent._on_node_changed(
-                    self, [self.label], "upd_attr", reason=reason
-                )
+                self.parent._on_node_changed(self, [self.label], "upd_attr", reason=reason)
 
     def subscribe(self, subscriber_id: str, callback: NodeSubscriberCallback) -> None:
         """Subscribe to changes on this specific node.

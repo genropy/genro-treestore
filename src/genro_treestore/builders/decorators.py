@@ -328,9 +328,7 @@ def _validate_attrs_from_spec(
                 try:
                     int(value)
                 except (ValueError, TypeError):
-                    errors.append(
-                        f"'{attr_name}' must be an integer, got {type(value).__name__}"
-                    )
+                    errors.append(f"'{attr_name}' must be an integer, got {type(value).__name__}")
                     continue
 
         elif type_name == "bool":
@@ -339,9 +337,7 @@ def _validate_attrs_from_spec(
                     if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
                         errors.append(f"'{attr_name}' must be a boolean, got '{value}'")
                 else:
-                    errors.append(
-                        f"'{attr_name}' must be a boolean, got {type(value).__name__}"
-                    )
+                    errors.append(f"'{attr_name}' must be a boolean, got {type(value).__name__}")
 
         elif type_name == "enum":
             values = attr_spec.get("values", [])

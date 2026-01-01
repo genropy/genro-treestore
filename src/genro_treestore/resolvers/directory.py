@@ -243,9 +243,7 @@ class DirectoryResolver(TreeStoreResolver):
                     add_it = self._filter_match(fname, exclude=self.exclude)
             else:
                 if self.include or self.exclude:
-                    add_it = self._filter_match(
-                        fname, include=self.include, exclude=self.exclude
-                    )
+                    add_it = self._filter_match(fname, include=self.include, exclude=self.exclude)
                 fname_base, ext = os.path.splitext(fname)
                 ext = ext[1:]  # Remove leading dot
                 fname = fname_base
@@ -390,7 +388,7 @@ class DirectoryResolver(TreeStoreResolver):
         return None
 
     def __repr__(self) -> str:
-        return f"DirectoryResolver({self.path!r}, " f"cache_time={self.cache_time})"
+        return f"DirectoryResolver({self.path!r}, cache_time={self.cache_time})"
 
 
 class TxtDocResolver(TreeStoreResolver):

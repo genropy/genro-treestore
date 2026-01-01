@@ -156,9 +156,7 @@ class TreeStore(SubscriptionMixin):
         elif isinstance(source, list):
             load_from_list(self, source)
         else:
-            raise TypeError(
-                f"source must be dict, list, or TreeStore, not {type(source).__name__}"
-            )
+            raise TypeError(f"source must be dict, list, or TreeStore, not {type(source).__name__}")
 
     # ==================== Special Methods ====================
 
@@ -208,9 +206,7 @@ class TreeStore(SubscriptionMixin):
             AttributeError: If no builder or builder has no such method.
         """
         if name.startswith("_"):
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
         if self._builder is not None:
             # Let the builder raise its own AttributeError with a descriptive message
@@ -220,9 +216,7 @@ class TreeStore(SubscriptionMixin):
                     self, tag=name, label=_nodelabel, **attr
                 )
 
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     @property
     def builder(self) -> Any:
@@ -263,7 +257,7 @@ class TreeStore(SubscriptionMixin):
         if index < 0:
             index = len(self._order) + index
         if index < 0 or index >= len(self._order):
-            raise KeyError(f"Position #{index} out of range (0-{len(self._order)-1})")
+            raise KeyError(f"Position #{index} out of range (0-{len(self._order) - 1})")
         return self._order[index]
 
     def _index_of(self, label: str) -> int:
@@ -399,9 +393,7 @@ class TreeStore(SubscriptionMixin):
                     node = current._get_node_by_position(key)
                 except KeyError:
                     if autocreate:
-                        raise KeyError(
-                            f"Cannot autocreate with positional syntax #{key}"
-                        )
+                        raise KeyError(f"Cannot autocreate with positional syntax #{key}")
                     raise
             else:
                 if key not in current._nodes:
@@ -508,9 +500,7 @@ class TreeStore(SubscriptionMixin):
         else:
             # Branch node
             child_store = TreeStore(builder=parent_store._builder)
-            node = TreeStoreNode(
-                label, final_attr, value=child_store, parent=parent_store
-            )
+            node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
             child_store.parent = node
             parent_store._insert_node(node, _position)
             return child_store  # Return child store for chaining children
@@ -637,9 +627,7 @@ class TreeStore(SubscriptionMixin):
         except KeyError:
             return default
 
-    def set_attr(
-        self, path: str, _attributes: dict[str, Any] | None = None, **kwargs: Any
-    ) -> None:
+    def set_attr(self, path: str, _attributes: dict[str, Any] | None = None, **kwargs: Any) -> None:
         """Set attributes on node at path.
 
         Args:
@@ -852,9 +840,7 @@ class TreeStore(SubscriptionMixin):
             return None
 
         # Generator mode
-        def _walk_gen(
-            store: TreeStore, prefix: str
-        ) -> Iterator[tuple[str, TreeStoreNode]]:
+        def _walk_gen(store: TreeStore, prefix: str) -> Iterator[tuple[str, TreeStoreNode]]:
             for node in store._order:
                 path = f"{prefix}.{node.label}" if prefix else node.label
                 yield path, node
@@ -1058,9 +1044,7 @@ class TreeStore(SubscriptionMixin):
         elif isinstance(other, TreeStore):
             other_store = other
         else:
-            raise TypeError(
-                f"other must be dict, list, or TreeStore, not {type(other).__name__}"
-            )
+            raise TypeError(f"other must be dict, list, or TreeStore, not {type(other).__name__}")
 
         self._update_from_treestore(other_store, ignore_none)
 
@@ -1380,9 +1364,7 @@ class TreeStore(SubscriptionMixin):
         def load_element(element: ET.Element, store: "TreeStore") -> None:
             """Recursively load XML element into store."""
             local, prefixed = clean_tag(element.tag)
-            existing = [
-                n.label for n in store.nodes() if n.label.startswith(f"{local}_")
-            ]
+            existing = [n.label for n in store.nodes() if n.label.startswith(f"{local}_")]
             label = f"{local}_{len(existing)}"
 
             attribs = {k: v for k, v in element.attrib.items() if not k.startswith("{")}
@@ -1476,9 +1458,7 @@ class TreeStore(SubscriptionMixin):
                 node_tag = node.attr.get("_tag") or node.label.rsplit("_", 1)[0]
 
                 # Copy non-internal attributes
-                attribs = {
-                    k: str(v) for k, v in node.attr.items() if not k.startswith("_")
-                }
+                attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith("_")}
 
                 if node.is_branch:
                     # Recurse into child store
