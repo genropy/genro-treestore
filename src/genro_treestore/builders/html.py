@@ -15,7 +15,7 @@ from .base import BuilderBase
 
 if TYPE_CHECKING:
     from ..store import TreeStore
-    from ..node import TreeStoreNode
+    from ..store import TreeStoreNode
 
 
 # HTML Element Schema

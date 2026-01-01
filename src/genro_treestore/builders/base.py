@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..store import TreeStore
-    from ..node import TreeStoreNode
+    from ..store import TreeStoreNode
 
 
 class BuilderBase(ABC):
@@ -400,7 +400,7 @@ class BuilderBase(ABC):
         """
         # Import here to avoid circular dependency
         from ..store import TreeStore
-        from ..node import TreeStoreNode
+        from ..store import TreeStoreNode
 
         # Auto-generate label if not provided
         if label is None:

@@ -15,7 +15,7 @@ Example:
     Basic usage::
 
         from genro_treestore import TreeStore
-        from genro_treestore.directory_resolver import DirectoryResolver
+        from genro_treestore.resolvers import DirectoryResolver
 
         store = TreeStore()
         store.set_item('docs')
@@ -61,8 +61,8 @@ from typing import Any, Callable
 
 from genro_toolbox import smartasync
 
-from .resolver import TreeStoreResolver
-from .store import TreeStore
+from .base import TreeStoreResolver
+from ..store import TreeStore
 
 
 class DirectoryResolver(TreeStoreResolver):

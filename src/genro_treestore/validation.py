@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .store import TreeStore
-    from .node import TreeStoreNode
+    from .store import TreeStoreNode
     from .builders.base import BuilderBase
 
 

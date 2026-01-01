@@ -118,7 +118,7 @@ from typing import Any, Callable, TYPE_CHECKING
 from genro_toolbox import smartasync
 
 if TYPE_CHECKING:
-    from .node import TreeStoreNode
+    from ..store import TreeStoreNode
 
 
 class TreeStoreResolver:

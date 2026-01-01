@@ -1,19 +1,59 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""TreeStore - A lightweight hierarchical data structure."""
+"""TreeStore - A lightweight hierarchical data structure.
+
+This module provides the TreeStore class, the core container for hierarchical
+data in the genro-treestore library. TreeStore offers O(1) lookup performance,
+path-based navigation, and reactive subscriptions for change detection.
+
+Key Features:
+    - **Hierarchical storage**: Nested TreeStoreNode instances forming a tree
+    - **O(1) lookup**: Internal dict-based storage for fast access by label
+    - **Path navigation**: Dotted paths ('a.b.c') and positional syntax ('#0.#1')
+    - **Builder pattern**: Optional builder for domain-specific fluent APIs
+    - **Reactive subscriptions**: Event notifications on data changes
+    - **Lazy resolution**: Support for resolvers that compute values on demand
+
+Path Syntax:
+    - Dotted paths: 'parent.child.grandchild'
+    - Positional: '#0' (first child), '#-1' (last child)
+    - Attribute access: 'node?attribute'
+    - Combined: 'parent.#0?color'
+
+Example:
+    Basic usage::
+
+        store = TreeStore()
+        store.set_item('config.database.host', 'localhost')
+        store.set_item('config.database.port', 5432)
+
+        print(store['config.database.host'])  # 'localhost'
+
+        # With attributes
+        store.set_item('config.debug', True, level='verbose')
+        print(store['config.debug?level'])  # 'verbose'
+
+    With builder::
+
+        store = TreeStore(builder=HtmlBuilder())
+        body = store.body()
+        body.div(id='main').p('Hello World')
+"""
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, TYPE_CHECKING
 
 from .node import TreeStoreNode
+from .subscription import SubscriptionMixin, SubscriberCallback
+from .loading import load_from_dict, load_from_list, load_from_treestore
 
-# Type alias for subscriber callbacks
-SubscriberCallback = Callable[..., None]
+if TYPE_CHECKING:
+    pass
 
 
-class TreeStore:
+class TreeStore(SubscriptionMixin):
     """A hierarchical data container with O(1) lookup.
 
     TreeStore provides:
@@ -23,6 +63,10 @@ class TreeStore:
     - digest(what): Extract data with #k, #v, #a syntax
 
     The internal storage uses dict for O(1) lookup performance.
+
+    Attributes:
+        parent: The TreeStoreNode that contains this store as its value,
+            or None if this is a root store.
 
     Example:
         >>> store = TreeStore()
@@ -81,7 +125,7 @@ class TreeStore:
 
         # Auto-register validation subscriber if builder is set
         if builder is not None and parent is None:
-            from .validation import ValidationSubscriber
+            from ..validation import ValidationSubscriber
             self._validator = ValidationSubscriber(self)
 
         if source is not None:
@@ -90,136 +134,50 @@ class TreeStore:
     def _load_source(
         self, source: dict | list | TreeStore
     ) -> None:
-        """Load data from source into this TreeStore."""
+        """Load data from source into this TreeStore.
+
+        Delegates to the appropriate loading function based on source type.
+
+        Args:
+            source: Data to load (dict, list, or TreeStore).
+
+        Raises:
+            TypeError: If source is not dict, list, or TreeStore.
+        """
         if isinstance(source, dict):
-            self._load_from_dict(source)
+            load_from_dict(self, source)
         elif isinstance(source, TreeStore):
-            self._load_from_treestore(source)
+            load_from_treestore(self, source)
         elif isinstance(source, list):
-            self._load_from_list(source)
+            load_from_list(self, source)
         else:
             raise TypeError(
                 f"source must be dict, list, or TreeStore, not {type(source).__name__}"
             )
 
-    def _load_from_dict(self, data: dict[str, Any]) -> None:
-        """Load data from a nested dict.
-
-        Keys starting with '_' are treated as attributes for the parent node.
-        Other keys become child nodes.
-        """
-        for key, value in data.items():
-            if key.startswith('_'):
-                # Skip attribute keys at root level (no parent to attach to)
-                continue
-
-            if isinstance(value, dict):
-                # Check for attributes in the dict
-                attr = {}
-                children = {}
-                node_value = None
-
-                for k, v in value.items():
-                    if k.startswith('_'):
-                        if k == '_value':
-                            node_value = v
-                        else:
-                            attr[k[1:]] = v  # Remove '_' prefix
-                    else:
-                        children[k] = v
-
-                if children:
-                    # Branch node with children
-                    child_store = TreeStore(builder=self._builder)
-                    node = TreeStoreNode(key, attr, value=child_store, parent=self)
-                    child_store.parent = node
-                    child_store._load_from_dict(children)
-                    self._insert_node(node, trigger=False)
-                else:
-                    # Leaf node (only _value and attributes)
-                    node = TreeStoreNode(key, attr, value=node_value, parent=self)
-                    self._insert_node(node, trigger=False)
-            else:
-                # Simple value
-                node = TreeStoreNode(key, {}, value=value, parent=self)
-                self._insert_node(node, trigger=False)
-
-    def _load_from_treestore(self, source: TreeStore) -> None:
-        """Copy data from another TreeStore."""
-        for src_node in source._order:
-            if src_node.is_branch:
-                # Recursively copy branch
-                child_store = TreeStore(builder=self._builder)
-                node = TreeStoreNode(
-                    src_node.label,
-                    dict(src_node.attr),  # Copy attributes
-                    value=child_store,
-                    parent=self,
-                )
-                child_store.parent = node
-                child_store._load_from_treestore(src_node.value)
-                self._insert_node(node, trigger=False)
-            else:
-                # Copy leaf
-                node = TreeStoreNode(
-                    src_node.label,
-                    dict(src_node.attr),
-                    value=src_node.value,
-                    parent=self,
-                )
-                self._insert_node(node, trigger=False)
-
-    def _load_from_list(self, items: list) -> None:
-        """Load data from a list of tuples.
-
-        Each tuple can be:
-            - (label, value)
-            - (label, value, attr_dict)
-        """
-        for item in items:
-            if len(item) == 2:
-                label, value = item
-                attr = {}
-            elif len(item) == 3:
-                label, value, attr = item
-                attr = dict(attr)  # Copy
-            else:
-                raise ValueError(
-                    f"List items must be (label, value) or (label, value, attr), "
-                    f"got {len(item)} elements"
-                )
-
-            if isinstance(value, dict):
-                # Nested dict becomes branch
-                child_store = TreeStore(builder=self._builder)
-                node = TreeStoreNode(label, attr, value=child_store, parent=self)
-                child_store.parent = node
-                child_store._load_from_dict(value)
-                self._insert_node(node, trigger=False)
-            elif isinstance(value, list) and value and isinstance(value[0], tuple):
-                # Nested list of tuples becomes branch
-                child_store = TreeStore(builder=self._builder)
-                node = TreeStoreNode(label, attr, value=child_store, parent=self)
-                child_store.parent = node
-                child_store._load_from_list(value)
-                self._insert_node(node, trigger=False)
-            else:
-                # Simple value
-                node = TreeStoreNode(label, attr, value=value, parent=self)
-                self._insert_node(node, trigger=False)
+    # ==================== Special Methods ====================
 
     def __repr__(self) -> str:
+        """Return string representation showing node labels."""
         return f"TreeStore({list(self._nodes.keys())})"
 
     def __len__(self) -> int:
+        """Return the number of direct children in this store."""
         return len(self._nodes)
 
     def __iter__(self) -> Iterator[TreeStoreNode]:
-        """Iterate over nodes in insertion order."""
+        """Iterate over direct child nodes in insertion order."""
         return iter(self._order)
 
     def __contains__(self, label: str) -> bool:
-        """Check if a label exists at root level or as a path."""
+        """Check if a label exists at root level or as a path.
+
+        Args:
+            label: Label or dotted path to check.
+
+        Returns:
+            True if the label/path exists, False otherwise.
+        """
         if '.' not in label:
             return label in self._nodes
         try:
@@ -269,8 +227,13 @@ class TreeStore:
     def _parse_path_segment(self, segment: str) -> tuple[bool, int | str]:
         """Parse a path segment, detecting positional index (#N) syntax.
 
+        Args:
+            segment: A single path segment (e.g., 'child' or '#0').
+
         Returns:
-            Tuple of (is_positional, index_or_label)
+            Tuple of (is_positional, index_or_label) where:
+            - is_positional: True if segment uses #N syntax
+            - index_or_label: Integer index if positional, string label otherwise
         """
         if segment.startswith('#'):
             rest = segment[1:]
@@ -279,7 +242,17 @@ class TreeStore:
         return False, segment
 
     def _get_node_by_position(self, index: int) -> TreeStoreNode:
-        """Get node by positional index (O(1) via _order list)."""
+        """Get node by positional index (O(1) via _order list).
+
+        Args:
+            index: Position index (supports negative indexing).
+
+        Returns:
+            TreeStoreNode at the specified position.
+
+        Raises:
+            KeyError: If index is out of range.
+        """
         if index < 0:
             index = len(self._order) + index
         if index < 0 or index >= len(self._order):
@@ -287,7 +260,17 @@ class TreeStore:
         return self._order[index]
 
     def _index_of(self, label: str) -> int:
-        """Get the position index of a label (O(n))."""
+        """Get the position index of a node by its label.
+
+        Args:
+            label: The label to search for.
+
+        Returns:
+            Integer position index in _order list.
+
+        Raises:
+            KeyError: If label not found.
+        """
         for i, node in enumerate(self._order):
             if node.label == label:
                 return i
@@ -369,6 +352,9 @@ class TreeStore:
 
         Returns:
             The removed node.
+
+        Raises:
+            KeyError: If label not found.
         """
         node = self._nodes.pop(label)
         idx = self._order.index(node)
@@ -390,6 +376,9 @@ class TreeStore:
 
         Returns:
             Tuple of (parent_store, final_label)
+
+        Raises:
+            KeyError: If path segment not found and autocreate is False.
         """
         if not path:
             return self, ''
@@ -555,6 +544,9 @@ class TreeStore:
         Returns:
             Value at path, or attribute if ?attr used.
 
+        Raises:
+            KeyError: If path not found.
+
         Example:
             >>> store['html.body.div']  # value
             >>> store['html.body.div?color']  # attribute
@@ -679,6 +671,9 @@ class TreeStore:
 
         Returns:
             The removed TreeStoreNode.
+
+        Raises:
+            KeyError: If path not found.
         """
         if '.' not in path:
             return self._remove_node(path)
@@ -880,159 +875,6 @@ class TreeStore:
         """Get the parent node (alias for self.parent)."""
         return self.parent
 
-    # ==================== Triggers ====================
-
-    def subscribe(
-        self,
-        subscriber_id: str,
-        update: SubscriberCallback | None = None,
-        insert: SubscriberCallback | None = None,
-        delete: SubscriberCallback | None = None,
-        any: SubscriberCallback | None = None,
-    ) -> None:
-        """Subscribe to change events on this store.
-
-        Events propagate up the hierarchy: a subscriber on the root
-        receives events from all descendants, with the path indicating
-        where the change occurred.
-
-        Args:
-            subscriber_id: Unique identifier for this subscription.
-            update: Callback for value/attribute changes.
-            insert: Callback for node insertions.
-            delete: Callback for node deletions.
-            any: Callback for all events (shorthand for update+insert+delete).
-
-        Callback signature:
-            callback(node, path, evt, oldvalue=None, reason=None)
-            - node: The affected TreeStoreNode
-            - path: Dot-separated path from this store to the node
-            - evt: Event type ('upd_value', 'upd_attr', 'ins', 'del')
-            - oldvalue: Previous value (for updates)
-            - reason: Optional reason string (to detect self-triggered events)
-
-        Example:
-            >>> def on_change(node, path, evt, **kw):
-            ...     print(f"{evt} at {path}")
-            >>> store.subscribe('renderer', any=on_change)
-        """
-        if update or any:
-            self._upd_subscribers[subscriber_id] = update or any
-        if insert or any:
-            self._ins_subscribers[subscriber_id] = insert or any
-        if delete or any:
-            self._del_subscribers[subscriber_id] = delete or any
-
-    def unsubscribe(
-        self,
-        subscriber_id: str,
-        update: bool = False,
-        insert: bool = False,
-        delete: bool = False,
-        any: bool = False,
-    ) -> None:
-        """Unsubscribe from change events.
-
-        Args:
-            subscriber_id: The subscription identifier to remove.
-            update: Unsubscribe from update events.
-            insert: Unsubscribe from insert events.
-            delete: Unsubscribe from delete events.
-            any: Unsubscribe from all events.
-        """
-        if update or any:
-            self._upd_subscribers.pop(subscriber_id, None)
-        if insert or any:
-            self._ins_subscribers.pop(subscriber_id, None)
-        if delete or any:
-            self._del_subscribers.pop(subscriber_id, None)
-
-    def _on_node_changed(
-        self,
-        node: TreeStoreNode,
-        pathlist: list[str],
-        evt: str,
-        oldvalue: Any = None,
-        reason: str | None = None,
-    ) -> None:
-        """Notify subscribers of a node change and propagate to parent.
-
-        Args:
-            node: The node that changed.
-            pathlist: Path components from this store to the node.
-            evt: Event type ('upd_value' or 'upd_attr').
-            oldvalue: Previous value.
-            reason: Optional reason string.
-        """
-        path = '.'.join(pathlist)
-        for callback in self._upd_subscribers.values():
-            callback(node=node, path=path, evt=evt, oldvalue=oldvalue, reason=reason)
-
-        if self.parent is not None:
-            parent_store = self.parent.parent
-            if parent_store is not None:
-                parent_store._on_node_changed(
-                    node, [self.parent.label] + pathlist, evt, oldvalue, reason
-                )
-
-    def _on_node_inserted(
-        self,
-        node: TreeStoreNode,
-        index: int,
-        pathlist: list[str] | None = None,
-        reason: str | None = None,
-    ) -> None:
-        """Notify subscribers of a node insertion and propagate to parent.
-
-        Args:
-            node: The inserted node.
-            index: Position where node was inserted.
-            pathlist: Path components from this store to the node.
-            reason: Optional reason string.
-        """
-        if pathlist is None:
-            pathlist = []
-        path = '.'.join(pathlist) if pathlist else node.label
-
-        for callback in self._ins_subscribers.values():
-            callback(node=node, path=path, index=index, evt='ins', reason=reason)
-
-        if self.parent is not None:
-            parent_store = self.parent.parent
-            if parent_store is not None:
-                parent_store._on_node_inserted(
-                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
-                )
-
-    def _on_node_deleted(
-        self,
-        node: TreeStoreNode,
-        index: int,
-        pathlist: list[str] | None = None,
-        reason: str | None = None,
-    ) -> None:
-        """Notify subscribers of a node deletion and propagate to parent.
-
-        Args:
-            node: The deleted node.
-            index: Position where node was removed from.
-            pathlist: Path components from this store to the node.
-            reason: Optional reason string.
-        """
-        if pathlist is None:
-            pathlist = []
-        path = '.'.join(pathlist) if pathlist else node.label
-
-        for callback in self._del_subscribers.values():
-            callback(node=node, path=path, index=index, evt='del', reason=reason)
-
-        if self.parent is not None:
-            parent_store = self.parent.parent
-            if parent_store is not None:
-                parent_store._on_node_deleted(
-                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
-                )
-
     # ==================== Conversion ====================
 
     def as_dict(self) -> dict[str, Any]:
@@ -1040,6 +882,9 @@ class TreeStore:
 
         Branch nodes become nested dicts with their attributes and children.
         Leaf nodes become their value directly (or dict with _value if has attrs).
+
+        Returns:
+            Nested dictionary representation of the tree.
         """
         result: dict[str, Any] = {}
         for node in self._order:
@@ -1060,7 +905,10 @@ class TreeStore:
         return result
 
     def clear(self) -> None:
-        """Remove all nodes."""
+        """Remove all nodes from this store.
+
+        Does not trigger deletion events for individual nodes.
+        """
         self._nodes.clear()
         self._order.clear()
 
@@ -1106,7 +954,14 @@ class TreeStore:
         other: TreeStore,
         ignore_none: bool = False,
     ) -> None:
-        """Update this TreeStore from another TreeStore."""
+        """Update this TreeStore from another TreeStore.
+
+        Internal method that performs the actual merge operation.
+
+        Args:
+            other: Source TreeStore to merge from.
+            ignore_none: If True, skip None values.
+        """
         for other_node in other._order:
             label = other_node.label
             other_value = other_node.value
@@ -1138,7 +993,7 @@ class TreeStore:
                         parent=self,
                     )
                     child_store.parent = node
-                    child_store._load_from_treestore(other_value)
+                    load_from_treestore(child_store, other_value)
                     self._insert_node(node)
                 else:
                     # Copy leaf
@@ -1151,7 +1006,17 @@ class TreeStore:
                     self._insert_node(node)
 
     def get(self, label: str, default: Any = None) -> TreeStoreNode | None:
-        """Get node by label at this level, with default."""
+        """Get node by label at this level, with default.
+
+        Unlike get_node(), this only looks at direct children (no path traversal).
+
+        Args:
+            label: Node label to find.
+            default: Value to return if not found.
+
+        Returns:
+            TreeStoreNode if found, default otherwise.
+        """
         return self._nodes.get(label, default)
 
     # ==================== Validation ====================

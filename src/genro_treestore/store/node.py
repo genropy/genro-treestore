@@ -1,15 +1,41 @@
 # Copyright 2025 Softwell S.r.l. - Genropy Team
 # SPDX-License-Identifier: Apache-2.0
 
-"""TreeStore node classes."""
+"""TreeStore node - Individual nodes in the tree hierarchy.
+
+This module provides the TreeStoreNode class, which represents a single node
+in a TreeStore hierarchy. Each node has a label (unique key within its parent),
+attributes, a value, and optional validation state.
+
+Node Types:
+    - **Leaf node**: Contains a scalar value (string, number, etc.)
+    - **Branch node**: Contains a TreeStore as its value, enabling nested hierarchies
+
+Key Features:
+    - Dual relationship: node.parent → TreeStore, TreeStore.parent → node
+    - Optional tag for builder-based validation
+    - Resolver support for lazy/dynamic value computation
+    - Per-node subscriptions for change notifications
+    - Validation state tracking via _invalid_reasons
+
+Example:
+    >>> from genro_treestore import TreeStoreNode
+    >>> node = TreeStoreNode('user', {'id': 1}, value='Alice')
+    >>> node.label
+    'user'
+    >>> node.attr['id']
+    1
+    >>> node.value
+    'Alice'
+"""
 
 from __future__ import annotations
 
 from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .store import TreeStore
-    from .resolver import TreeStoreResolver
+    from .core import TreeStore
+    from ..resolvers import TreeStoreResolver
 
 # Type alias for node subscriber callbacks
 NodeSubscriberCallback = Callable[..., None]
@@ -66,7 +92,7 @@ class TreeStoreNode:
             self.resolver = resolver  # Use setter to set parent_node
 
     def __repr__(self) -> str:
-        from .store import TreeStore
+        from .core import TreeStore
         value_repr = (
             f"TreeStore({len(self._value)})"
             if isinstance(self._value, TreeStore)
@@ -135,13 +161,13 @@ class TreeStoreNode:
     @property
     def is_branch(self) -> bool:
         """True if this node contains a TreeStore (has children)."""
-        from .store import TreeStore
+        from .core import TreeStore
         return isinstance(self._value, TreeStore)
 
     @property
     def is_leaf(self) -> bool:
         """True if this node contains a scalar value."""
-        from .store import TreeStore
+        from .core import TreeStore
         return not isinstance(self._value, TreeStore)
 
     @property
