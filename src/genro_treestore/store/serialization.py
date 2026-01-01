@@ -72,7 +72,7 @@ if TYPE_CHECKING:
 
 def to_tytx(
     store: TreeStore,
-    transport: Literal['json', 'msgpack'] | None = None,
+    transport: Literal["json", "msgpack"] | None = None,
     compact: bool = False,
 ) -> str | bytes:
     """Serialize a TreeStore to TYTX format.
@@ -141,15 +141,15 @@ def to_tytx(
         rows = list(store.flattened(path_registry=paths))
         # Convert int keys to str for JSON compatibility
         paths_str = {str(k): v for k, v in paths.items()}
-        return tytx_encode({'rows': rows, 'paths': paths_str}, transport=transport)
+        return tytx_encode({"rows": rows, "paths": paths_str}, transport=transport)
     else:
         rows = list(store.flattened())
-        return tytx_encode({'rows': rows}, transport=transport)
+        return tytx_encode({"rows": rows}, transport=transport)
 
 
 def from_tytx(
     data: str | bytes,
-    transport: Literal['json', 'msgpack'] | None = None,
+    transport: Literal["json", "msgpack"] | None = None,
     builder: Any | None = None,
 ) -> TreeStore:
     """Deserialize TreeStore from TYTX format.
@@ -228,9 +228,9 @@ def from_tytx(
     from .node import TreeStoreNode
 
     parsed = tytx_decode(data, transport=transport)
-    rows = parsed['rows']
+    rows = parsed["rows"]
     # Check if compact format (has 'paths' registry)
-    paths_raw = parsed.get('paths')
+    paths_raw = parsed.get("paths")
     # Convert str keys back to int if present
     code_to_path: dict[int, str] | None = (
         {int(k): v for k, v in paths_raw.items()} if paths_raw else None
@@ -239,14 +239,16 @@ def from_tytx(
     store = TreeStore(builder=builder)
 
     # Registry to track created branch stores by path
-    path_to_store: dict[str, TreeStore] = {'': store}
+    path_to_store: dict[str, TreeStore] = {"": store}
 
     for row in rows:
         parent_ref, label, tag, value, attr = row
 
         # Resolve parent path from code if compact format
         if code_to_path is not None:
-            parent_path = code_to_path.get(parent_ref, '') if parent_ref is not None else ''
+            parent_path = (
+                code_to_path.get(parent_ref, "") if parent_ref is not None else ""
+            )
         else:
             parent_path = parent_ref
 

@@ -84,9 +84,9 @@ class BuilderBase(ABC):
         Raises:
             ValueError: If validation fails and raise_on_error is True.
         """
-        schema = getattr(self, '_schema', {})
+        schema = getattr(self, "_schema", {})
         spec = schema.get(tag, {})
-        attrs_spec = spec.get('attrs')
+        attrs_spec = spec.get("attrs")
 
         if not attrs_spec:
             return []
@@ -95,8 +95,8 @@ class BuilderBase(ABC):
 
         for attr_name, attr_spec in attrs_spec.items():
             value = attrs.get(attr_name)
-            required = attr_spec.get('required', False)
-            type_name = attr_spec.get('type', 'string')
+            required = attr_spec.get("required", False)
+            type_name = attr_spec.get("type", "string")
 
             # Check required
             if required and value is None:
@@ -108,7 +108,7 @@ class BuilderBase(ABC):
                 continue
 
             # Type validation
-            if type_name == 'int':
+            if type_name == "int":
                 if not isinstance(value, int):
                     try:
                         value = int(value)
@@ -119,21 +119,24 @@ class BuilderBase(ABC):
                         continue
 
                 # Range constraints
-                min_val = attr_spec.get('min')
-                max_val = attr_spec.get('max')
+                min_val = attr_spec.get("min")
+                max_val = attr_spec.get("max")
                 if min_val is not None and value < min_val:
-                    errors.append(
-                        f"'{attr_name}' must be >= {min_val}, got {value}"
-                    )
+                    errors.append(f"'{attr_name}' must be >= {min_val}, got {value}")
                 if max_val is not None and value > max_val:
-                    errors.append(
-                        f"'{attr_name}' must be <= {max_val}, got {value}"
-                    )
+                    errors.append(f"'{attr_name}' must be <= {max_val}, got {value}")
 
-            elif type_name == 'bool':
+            elif type_name == "bool":
                 if not isinstance(value, bool):
                     if isinstance(value, str):
-                        if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+                        if value.lower() not in (
+                            "true",
+                            "false",
+                            "1",
+                            "0",
+                            "yes",
+                            "no",
+                        ):
                             errors.append(
                                 f"'{attr_name}' must be a boolean, got '{value}'"
                             )
@@ -142,21 +145,23 @@ class BuilderBase(ABC):
                             f"'{attr_name}' must be a boolean, got {type(value).__name__}"
                         )
 
-            elif type_name == 'enum':
-                values = attr_spec.get('values', [])
+            elif type_name == "enum":
+                values = attr_spec.get("values", [])
                 if values and value not in values:
                     errors.append(
                         f"'{attr_name}' must be one of {values}, got '{value}'"
                     )
 
             # string, uri, idrefs, idref, color - accept any string
-            elif type_name in ('string', 'uri', 'idrefs', 'idref', 'color'):
+            elif type_name in ("string", "uri", "idrefs", "idref", "color"):
                 if not isinstance(value, str):
                     # Allow conversion to string
                     pass
 
         if errors and raise_on_error:
-            raise ValueError(f"Attribute validation failed for '{tag}': " + "; ".join(errors))
+            raise ValueError(
+                f"Attribute validation failed for '{tag}': " + "; ".join(errors)
+            )
 
         return errors
 
@@ -207,7 +212,9 @@ class BuilderBase(ABC):
                     resolved.update(resolved_item)
                 elif isinstance(resolved_item, str):
                     # Could be comma-separated string
-                    resolved.update(t.strip() for t in resolved_item.split(',') if t.strip())
+                    resolved.update(
+                        t.strip() for t in resolved_item.split(",") if t.strip()
+                    )
                 else:
                     resolved.add(resolved_item)
             return frozenset(resolved) if isinstance(value, frozenset) else resolved
@@ -216,8 +223,8 @@ class BuilderBase(ABC):
             return value
 
         # If string contains comma, split and resolve each part recursively
-        if ',' in value:
-            parts = [p.strip() for p in value.split(',') if p.strip()]
+        if "," in value:
+            parts = [p.strip() for p in value.split(",") if p.strip()]
             resolved_parts = []
             for part in parts:
                 resolved_part = self._resolve_ref(part)
@@ -228,12 +235,12 @@ class BuilderBase(ABC):
                     resolved_parts.append(resolved_part)
                 else:
                     resolved_parts.append(str(resolved_part))
-            return ', '.join(resolved_parts)
+            return ", ".join(resolved_parts)
 
         # Single value - check if it's a reference
-        if value.startswith('='):
+        if value.startswith("="):
             ref_name = value[1:]  # '=flow' → 'flow'
-            prop_name = f'_ref_{ref_name}'
+            prop_name = f"_ref_{ref_name}"
 
             # Check if property exists on this instance
             if hasattr(self, prop_name):
@@ -255,19 +262,19 @@ class BuilderBase(ABC):
         # Start with parent's tags if any
         cls._element_tags = {}
         for base in cls.__mro__[1:]:
-            if hasattr(base, '_element_tags'):
+            if hasattr(base, "_element_tags"):
                 cls._element_tags.update(base._element_tags)
                 break
 
         # Scan class methods for @element decorated ones
         for name, method in cls.__dict__.items():
-            if name.startswith('_'):
+            if name.startswith("_"):
                 continue
             if not callable(method):
                 continue
 
-            element_tags = getattr(method, '_element_tags', None)
-            if element_tags is None and hasattr(method, '_valid_children'):
+            element_tags = getattr(method, "_element_tags", None)
+            if element_tags is None and hasattr(method, "_valid_children"):
                 # No explicit tags, use method name
                 cls._element_tags[name] = name
             elif element_tags:
@@ -277,25 +284,23 @@ class BuilderBase(ABC):
 
     def __getattr__(self, name: str) -> Any:
         """Look up tag in _element_tags or _schema and return handler."""
-        if name.startswith('_'):
+        if name.startswith("_"):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
             )
 
         # First, check decorated methods
-        element_tags = getattr(type(self), '_element_tags', {})
+        element_tags = getattr(type(self), "_element_tags", {})
         if name in element_tags:
             method_name = element_tags[name]
             return getattr(self, method_name)
 
         # Then, check _schema
-        schema = getattr(self, '_schema', {})
+        schema = getattr(self, "_schema", {})
         if name in schema:
             return self._make_schema_handler(name, schema[name])
 
-        raise AttributeError(
-            f"'{type(self).__name__}' has no element '{name}'"
-        )
+        raise AttributeError(f"'{type(self).__name__}' has no element '{name}'")
 
     def _make_schema_handler(self, tag: str, spec: dict):
         """Create a handler function for a schema-defined element.
@@ -310,26 +315,29 @@ class BuilderBase(ABC):
         Returns:
             A callable that creates the element.
         """
-        is_leaf = spec.get('leaf', False)
+        is_leaf = spec.get("leaf", False)
 
         # Capture self for closure
         builder = self
 
-        def handler(target, tag: str = tag, label: str | None = None, value=None, **attr):
+        def handler(
+            target, tag: str = tag, label: str | None = None, value=None, **attr
+        ):
             # Validation is handled by ValidationSubscriber after node creation
             # Determine value: user-provided > leaf default > branch (None)
             if value is None and is_leaf:
-                value = ''
+                value = ""
             return builder.child(target, tag, label=label, value=value, **attr)
 
         # Store validation rules on the handler for check() to find
         # Note: children_spec is resolved at validation time, not here
-        children_spec = spec.get('children')
+        children_spec = spec.get("children")
         if children_spec is not None:
             # Store raw spec - will be resolved in _parse_children_spec
             handler._raw_children_spec = children_spec
-            handler._valid_children, handler._child_cardinality = \
+            handler._valid_children, handler._child_cardinality = (
                 self._parse_children_spec(children_spec)
+            )
         else:
             # No children spec = leaf element (no children allowed)
             handler._valid_children = frozenset()
@@ -361,7 +369,7 @@ class BuilderBase(ABC):
 
         # Parse string spec with cardinality
         parsed: dict[str, tuple[int, int | None]] = {}
-        specs = [s.strip() for s in resolved_spec.split(',') if s.strip()]
+        specs = [s.strip() for s in resolved_spec.split(",") if s.strip()]
         for tag_spec in specs:
             tag, min_c, max_c = _parse_tag_spec(tag_spec)
             parsed[tag] = (min_c, max_c)
@@ -376,7 +384,7 @@ class BuilderBase(ABC):
         value: Any = None,
         _position: str | None = None,
         _builder: BuilderBase | None = None,
-        **attr: Any
+        **attr: Any,
     ) -> TreeStore | TreeStoreNode:
         """Create a child node in the target TreeStore.
 
@@ -443,26 +451,26 @@ class BuilderBase(ABC):
             return None, {}
 
         # First, check decorated methods
-        element_tags = getattr(type(self), '_element_tags', {})
+        element_tags = getattr(type(self), "_element_tags", {})
         if tag in element_tags:
             method_name = element_tags[tag]
             method = getattr(self, method_name, None)
             if method is not None:
                 # Check for raw children spec (needs dynamic resolution)
-                raw_spec = getattr(method, '_raw_children_spec', None)
+                raw_spec = getattr(method, "_raw_children_spec", None)
                 if raw_spec is not None:
                     # Re-parse with current instance for =ref resolution
                     return self._parse_children_spec(raw_spec)
                 # Otherwise use pre-computed values
-                valid = getattr(method, '_valid_children', None)
-                cardinality = getattr(method, '_child_cardinality', {})
+                valid = getattr(method, "_valid_children", None)
+                cardinality = getattr(method, "_child_cardinality", {})
                 return valid, cardinality
 
         # Then, check _schema
-        schema = getattr(self, '_schema', {})
+        schema = getattr(self, "_schema", {})
         if tag in schema:
             spec = schema[tag]
-            children_spec = spec.get('children')
+            children_spec = spec.get("children")
             if children_spec is not None:
                 return self._parse_children_spec(children_spec)
             else:
@@ -472,10 +480,7 @@ class BuilderBase(ABC):
         return None, {}
 
     def check(
-        self,
-        store: TreeStore,
-        parent_tag: str | None = None,
-        path: str = ''
+        self, store: TreeStore, parent_tag: str | None = None, path: str = ""
     ) -> list[str]:
         """Check the TreeStore structure against this builder's rules.
 
@@ -522,7 +527,9 @@ class BuilderBase(ABC):
 
             # Recursively check branch children
             if not node.is_leaf:
-                child_errors = self.check(node.value, parent_tag=child_tag, path=node_path)
+                child_errors = self.check(
+                    node.value, parent_tag=child_tag, path=node_path
+                )
                 errors.extend(child_errors)
 
         # Check per-tag cardinality constraints

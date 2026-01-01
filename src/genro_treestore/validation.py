@@ -40,7 +40,7 @@ class ValidationSubscriber:
         []  # Automatically cleared
     """
 
-    __slots__ = ('store', 'builder', '_raise_on_error')
+    __slots__ = ("store", "builder", "_raise_on_error")
 
     def __init__(self, store: TreeStore) -> None:
         """Initialize the validation subscriber.
@@ -50,8 +50,8 @@ class ValidationSubscriber:
         """
         self.store = store
         self.builder: BuilderBase | None = store._builder
-        self._raise_on_error: bool = getattr(store, '_raise_on_error', True)
-        store.subscribe('_validator', any=self._on_change)
+        self._raise_on_error: bool = getattr(store, "_raise_on_error", True)
+        store.subscribe("_validator", any=self._on_change)
 
     def _on_change(
         self,
@@ -68,7 +68,7 @@ class ValidationSubscriber:
             evt: Event type ('ins', 'del', 'upd_value', 'upd_attr').
             **kw: Additional event data (oldvalue, reason, index).
         """
-        if evt == 'del':
+        if evt == "del":
             # Node deleted → revalidate parent's children constraints
             # The node.parent is the TreeStore that contained the deleted node
             parent_store = node.parent
@@ -82,7 +82,7 @@ class ValidationSubscriber:
                 self._validate_children_constraints(node.parent)
             # For new branch nodes, also validate their own children constraints
             # (they start with 0 children, which may violate min constraints)
-            if evt == 'ins' and node.is_branch:
+            if evt == "ins" and node.is_branch:
                 self._validate_children_constraints(node.value)
 
     def _validate_node(self, node: TreeStoreNode) -> None:
@@ -95,8 +95,9 @@ class ValidationSubscriber:
         """
         # Clear previous attribute errors (keep cardinality errors on parent)
         node._invalid_reasons = [
-            e for e in node._invalid_reasons
-            if e.startswith('requires ') or e.startswith('allows ')
+            e
+            for e in node._invalid_reasons
+            if e.startswith("requires ") or e.startswith("allows ")
         ]
 
         if self.builder is None:
@@ -161,8 +162,9 @@ class ValidationSubscriber:
         # Update parent_node._invalid_reasons:
         # Remove old cardinality errors, add new ones
         parent_node._invalid_reasons = [
-            e for e in parent_node._invalid_reasons
-            if not e.startswith('requires ') and not e.startswith('allows ')
+            e
+            for e in parent_node._invalid_reasons
+            if not e.startswith("requires ") and not e.startswith("allows ")
         ] + cardinality_errors
 
         # Raise for hard errors if raise_on_error is True

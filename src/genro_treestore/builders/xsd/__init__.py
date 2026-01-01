@@ -17,4 +17,4 @@ Example:
 
 from .xsd_schema import XsdBuilder
 
-__all__ = ['XsdBuilder']
+__all__ = ["XsdBuilder"]

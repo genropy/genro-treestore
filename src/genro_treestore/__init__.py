@@ -106,7 +106,12 @@ from .exceptions import (
     TooManyChildrenError,
     TreeStoreError,
 )
-from .resolvers import CallbackResolver, TreeStoreResolver, DirectoryResolver, TxtDocResolver
+from .resolvers import (
+    CallbackResolver,
+    TreeStoreResolver,
+    DirectoryResolver,
+    TxtDocResolver,
+)
 from .store import TreeStore, TreeStoreNode
 from .store.subscription import SubscriberCallback
 from .validation import ValidationSubscriber

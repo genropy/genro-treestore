@@ -69,14 +69,14 @@ from .rnc import RncBuilder, LazyRncBuilder
 from .xsd import XsdBuilder
 
 __all__ = [
-    'BuilderBase',
-    'element',
-    'valid_children',
-    'HtmlBuilder',
-    'HtmlHeadBuilder',
-    'HtmlBodyBuilder',
-    'HtmlPage',
-    'RncBuilder',
-    'LazyRncBuilder',
-    'XsdBuilder',
+    "BuilderBase",
+    "element",
+    "valid_children",
+    "HtmlBuilder",
+    "HtmlHeadBuilder",
+    "HtmlBodyBuilder",
+    "HtmlPage",
+    "RncBuilder",
+    "LazyRncBuilder",
+    "XsdBuilder",
 ]

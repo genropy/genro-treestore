@@ -36,7 +36,6 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .core import TreeStore
-    from .node import TreeStoreNode
 
 
 def load_from_dict(
@@ -71,7 +70,7 @@ def load_from_dict(
     from .node import TreeStoreNode
 
     for key, value in data.items():
-        if key.startswith('_'):
+        if key.startswith("_"):
             # Skip attribute keys at root level (no parent to attach to)
             continue
 
@@ -82,8 +81,8 @@ def load_from_dict(
             node_value = None
 
             for k, v in value.items():
-                if k.startswith('_'):
-                    if k == '_value':
+                if k.startswith("_"):
+                    if k == "_value":
                         node_value = v
                     else:
                         attr[k[1:]] = v  # Remove '_' prefix

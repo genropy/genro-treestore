@@ -11,7 +11,7 @@ from functools import wraps
 from typing import Callable, Any, Literal, Union, get_origin, get_args
 
 # Pattern for tag with optional cardinality: tag, tag[n], tag[n:], tag[:m], tag[n:m]
-_TAG_PATTERN = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\[(\d*):?(\d*)\])?$')
+_TAG_PATTERN = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\[(\d*):?(\d*)\])?$")
 
 
 def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
@@ -51,7 +51,7 @@ def _parse_tag_spec(spec: str) -> tuple[str, int, int | None]:
         return tag, 0, None
 
     # Check if there was a colon in the original spec
-    has_colon = ':' in spec
+    has_colon = ":" in spec
 
     if not has_colon:
         # tag[n] - exactly n
@@ -87,7 +87,7 @@ def _extract_attrs_from_signature(func: Callable) -> dict[str, dict[str, Any]] |
     attrs_spec: dict[str, dict[str, Any]] = {}
 
     # Skip these parameters - they're not user attributes
-    skip_params = {'self', 'target', 'tag', 'label', 'value'}
+    skip_params = {"self", "target", "tag", "label", "value"}
 
     for name, param in sig.parameters.items():
         if name in skip_params:
@@ -110,11 +110,11 @@ def _extract_attrs_from_signature(func: Callable) -> dict[str, dict[str, Any]] |
 
         # Set required/default
         if param.default is inspect.Parameter.empty:
-            attr_spec['required'] = True
+            attr_spec["required"] = True
         else:
-            attr_spec['required'] = False
+            attr_spec["required"] = False
             if param.default is not None:
-                attr_spec['default'] = param.default
+                attr_spec["default"] = param.default
 
         attrs_spec[name] = attr_spec
 
@@ -143,22 +143,22 @@ def _annotation_to_attr_spec(annotation: Any) -> dict[str, Any]:
             # Optional[X] or X | None
             return _annotation_to_attr_spec(non_none_args[0])
         # Multiple types - fall back to string
-        return {'type': 'string'}
+        return {"type": "string"}
 
     # Handle Literal
     if origin is Literal:
-        return {'type': 'enum', 'values': list(args)}
+        return {"type": "enum", "values": list(args)}
 
     # Handle basic types
     if annotation is int:
-        return {'type': 'int'}
+        return {"type": "int"}
     elif annotation is bool:
-        return {'type': 'bool'}
+        return {"type": "bool"}
     elif annotation is str:
-        return {'type': 'string'}
+        return {"type": "string"}
 
     # Default to string
-    return {'type': 'string'}
+    return {"type": "string"}
 
 
 def _parse_tags(tags: str | tuple[str, ...]) -> list[str]:
@@ -173,16 +173,16 @@ def _parse_tags(tags: str | tuple[str, ...]) -> list[str]:
         List of tag names.
     """
     if isinstance(tags, str):
-        return [t.strip() for t in tags.split(',') if t.strip()]
+        return [t.strip() for t in tags.split(",") if t.strip()]
     elif isinstance(tags, tuple) and tags:
         return list(tags)
     return []
 
 
 def element(
-    tags: str | tuple[str, ...] = '',
-    children: str | tuple[str, ...] = '',
-    validate: bool = True
+    tags: str | tuple[str, ...] = "",
+    children: str | tuple[str, ...] = "",
+    validate: bool = True,
 ) -> Callable:
     """Decorator to define element tags and validation rules for a builder method.
 
@@ -239,8 +239,8 @@ def element(
     tag_list = _parse_tags(tags)
 
     # Check if children spec contains =references (need runtime resolution)
-    children_str = children if isinstance(children, str) else ','.join(children)
-    has_refs = '=' in children_str
+    children_str = children if isinstance(children, str) else ",".join(children)
+    has_refs = "=" in children_str
 
     # Parse children specs - accept both string and tuple
     # Skip parsing if there are references (will be resolved at runtime)
@@ -248,7 +248,7 @@ def element(
 
     if not has_refs:
         if isinstance(children, str):
-            specs = [s.strip() for s in children.split(',') if s.strip()]
+            specs = [s.strip() for s in children.split(",") if s.strip()]
         else:
             specs = list(children)
 
@@ -294,7 +294,9 @@ def element(
     return decorator
 
 
-def _validate_attrs_from_spec(attrs_spec: dict[str, dict[str, Any]], kwargs: dict[str, Any]) -> None:
+def _validate_attrs_from_spec(
+    attrs_spec: dict[str, dict[str, Any]], kwargs: dict[str, Any]
+) -> None:
     """Validate kwargs against attrs spec extracted from signature.
 
     Args:
@@ -308,8 +310,8 @@ def _validate_attrs_from_spec(attrs_spec: dict[str, dict[str, Any]], kwargs: dic
 
     for attr_name, attr_spec in attrs_spec.items():
         value = kwargs.get(attr_name)
-        required = attr_spec.get('required', False)
-        type_name = attr_spec.get('type', 'string')
+        required = attr_spec.get("required", False)
+        type_name = attr_spec.get("type", "string")
 
         # Check required
         if required and value is None:
@@ -321,7 +323,7 @@ def _validate_attrs_from_spec(attrs_spec: dict[str, dict[str, Any]], kwargs: dic
             continue
 
         # Type validation
-        if type_name == 'int':
+        if type_name == "int":
             if not isinstance(value, int):
                 try:
                     int(value)
@@ -331,24 +333,20 @@ def _validate_attrs_from_spec(attrs_spec: dict[str, dict[str, Any]], kwargs: dic
                     )
                     continue
 
-        elif type_name == 'bool':
+        elif type_name == "bool":
             if not isinstance(value, bool):
                 if isinstance(value, str):
-                    if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
-                        errors.append(
-                            f"'{attr_name}' must be a boolean, got '{value}'"
-                        )
+                    if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
+                        errors.append(f"'{attr_name}' must be a boolean, got '{value}'")
                 else:
                     errors.append(
                         f"'{attr_name}' must be a boolean, got {type(value).__name__}"
                     )
 
-        elif type_name == 'enum':
-            values = attr_spec.get('values', [])
+        elif type_name == "enum":
+            values = attr_spec.get("values", [])
             if values and value not in values:
-                errors.append(
-                    f"'{attr_name}' must be one of {values}, got '{value}'"
-                )
+                errors.append(f"'{attr_name}' must be one of {values}, got '{value}'")
 
     if errors:
         raise ValueError("Attribute validation failed: " + "; ".join(errors))

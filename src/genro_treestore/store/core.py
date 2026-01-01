@@ -76,9 +76,15 @@ class TreeStore(SubscriptionMixin):
     """
 
     __slots__ = (
-        '_nodes', '_order', 'parent', '_builder',
-        '_upd_subscribers', '_ins_subscribers', '_del_subscribers',
-        '_raise_on_error', '_validator',
+        "_nodes",
+        "_order",
+        "parent",
+        "_builder",
+        "_upd_subscribers",
+        "_ins_subscribers",
+        "_del_subscribers",
+        "_raise_on_error",
+        "_validator",
     )
 
     def __init__(
@@ -126,14 +132,13 @@ class TreeStore(SubscriptionMixin):
         # Auto-register validation subscriber if builder is set
         if builder is not None and parent is None:
             from ..validation import ValidationSubscriber
+
             self._validator = ValidationSubscriber(self)
 
         if source is not None:
             self._load_source(source)
 
-    def _load_source(
-        self, source: dict | list | TreeStore
-    ) -> None:
+    def _load_source(self, source: dict | list | TreeStore) -> None:
         """Load data from source into this TreeStore.
 
         Delegates to the appropriate loading function based on source type.
@@ -178,7 +183,7 @@ class TreeStore(SubscriptionMixin):
         Returns:
             True if the label/path exists, False otherwise.
         """
-        if '.' not in label:
+        if "." not in label:
             return label in self._nodes
         try:
             self.get_node(label)
@@ -202,7 +207,7 @@ class TreeStore(SubscriptionMixin):
         Raises:
             AttributeError: If no builder or builder has no such method.
         """
-        if name.startswith('_'):
+        if name.startswith("_"):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
             )
@@ -211,7 +216,9 @@ class TreeStore(SubscriptionMixin):
             # Let the builder raise its own AttributeError with a descriptive message
             handler = getattr(self._builder, name)
             if callable(handler):
-                return lambda _nodelabel=None, **attr: handler(self, tag=name, label=_nodelabel, **attr)
+                return lambda _nodelabel=None, **attr: handler(
+                    self, tag=name, label=_nodelabel, **attr
+                )
 
         raise AttributeError(
             f"'{type(self).__name__}' object has no attribute '{name}'"
@@ -235,9 +242,9 @@ class TreeStore(SubscriptionMixin):
             - is_positional: True if segment uses #N syntax
             - index_or_label: Integer index if positional, string label otherwise
         """
-        if segment.startswith('#'):
+        if segment.startswith("#"):
             rest = segment[1:]
-            if rest.lstrip('-').isdigit():
+            if rest.lstrip("-").isdigit():
                 return True, int(rest)
         return False, segment
 
@@ -300,31 +307,31 @@ class TreeStore(SubscriptionMixin):
         """
         self._nodes[node.label] = node
 
-        if position is None or position == '>':
+        if position is None or position == ">":
             idx = len(self._order)
             self._order.append(node)
-        elif position == '<':
+        elif position == "<":
             idx = 0
             self._order.insert(0, node)
-        elif position.startswith('<#'):
+        elif position.startswith("<#"):
             idx = int(position[2:])
             if idx < 0:
                 idx = len(self._order) + idx
             self._order.insert(idx, node)
-        elif position.startswith('>#'):
+        elif position.startswith(">#"):
             idx = int(position[2:]) + 1
             if idx < 0:
                 idx = len(self._order) + idx + 1
             self._order.insert(idx, node)
-        elif position.startswith('<'):
+        elif position.startswith("<"):
             label = position[1:]
             idx = self._index_of(label)
             self._order.insert(idx, node)
-        elif position.startswith('>'):
+        elif position.startswith(">"):
             label = position[1:]
             idx = self._index_of(label) + 1
             self._order.insert(idx, node)
-        elif position.startswith('#'):
+        elif position.startswith("#"):
             idx = int(position[1:])
             if idx < 0:
                 idx = len(self._order) + idx
@@ -365,9 +372,7 @@ class TreeStore(SubscriptionMixin):
 
         return node
 
-    def _htraverse(
-        self, path: str, autocreate: bool = False
-    ) -> tuple[TreeStore, str]:
+    def _htraverse(self, path: str, autocreate: bool = False) -> tuple[TreeStore, str]:
         """Traverse path, optionally creating intermediate nodes.
 
         Args:
@@ -381,9 +386,9 @@ class TreeStore(SubscriptionMixin):
             KeyError: If path segment not found and autocreate is False.
         """
         if not path:
-            return self, ''
+            return self, ""
 
-        parts = path.split('.')
+        parts = path.split(".")
         current = self
 
         for i, part in enumerate(parts[:-1]):
@@ -394,7 +399,9 @@ class TreeStore(SubscriptionMixin):
                     node = current._get_node_by_position(key)
                 except KeyError:
                     if autocreate:
-                        raise KeyError(f"Cannot autocreate with positional syntax #{key}")
+                        raise KeyError(
+                            f"Cannot autocreate with positional syntax #{key}"
+                        )
                     raise
             else:
                 if key not in current._nodes:
@@ -428,7 +435,7 @@ class TreeStore(SubscriptionMixin):
                     child_store.parent = node
                     node._value = child_store
                 else:
-                    remaining = '.'.join(parts[i+1:])
+                    remaining = ".".join(parts[i + 1 :])
                     raise KeyError(f"'{part}' is a leaf, cannot access '{remaining}'")
 
             # Use _value directly to avoid re-triggering resolver
@@ -444,7 +451,7 @@ class TreeStore(SubscriptionMixin):
         value: Any = None,
         _attributes: dict[str, Any] | None = None,
         _position: str | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> TreeStore:
         """Set an item at the given path, creating intermediate nodes as needed.
 
@@ -501,7 +508,9 @@ class TreeStore(SubscriptionMixin):
         else:
             # Branch node
             child_store = TreeStore(builder=parent_store._builder)
-            node = TreeStoreNode(label, final_attr, value=child_store, parent=parent_store)
+            node = TreeStoreNode(
+                label, final_attr, value=child_store, parent=parent_store
+            )
             child_store.parent = node
             parent_store._insert_node(node, _position)
             return child_store  # Return child store for chaining children
@@ -523,8 +532,8 @@ class TreeStore(SubscriptionMixin):
         try:
             # Check for attribute access
             attr_name = None
-            if '?' in path:
-                path, attr_name = path.rsplit('?', 1)
+            if "?" in path:
+                path, attr_name = path.rsplit("?", 1)
 
             node = self.get_node(path)
 
@@ -554,8 +563,8 @@ class TreeStore(SubscriptionMixin):
         """
         # Check for attribute access
         attr_name = None
-        if '?' in path:
-            path, attr_name = path.rsplit('?', 1)
+        if "?" in path:
+            path, attr_name = path.rsplit("?", 1)
 
         node = self.get_node(path)
 
@@ -575,9 +584,9 @@ class TreeStore(SubscriptionMixin):
             >>> store['html.body.div'] = 'text'  # set value
             >>> store['html.body.div?color'] = 'red'  # set attribute
         """
-        if '?' in path:
+        if "?" in path:
             # Set attribute
-            node_path, attr_name = path.rsplit('?', 1)
+            node_path, attr_name = path.rsplit("?", 1)
             node = self.get_node(node_path)
             node.attr[attr_name] = value
         else:
@@ -599,7 +608,7 @@ class TreeStore(SubscriptionMixin):
         if not path:
             raise KeyError("Empty path")
 
-        if '.' not in path:
+        if "." not in path:
             is_pos, key = self._parse_path_segment(path)
             if is_pos:
                 return self._get_node_by_position(key)
@@ -675,7 +684,7 @@ class TreeStore(SubscriptionMixin):
         Raises:
             KeyError: If path not found.
         """
-        if '.' not in path:
+        if "." not in path:
             return self._remove_node(path)
 
         parent_store, label = self._htraverse(path, autocreate=False)
@@ -734,7 +743,7 @@ class TreeStore(SubscriptionMixin):
         """Return list of nodes at this level in insertion order."""
         return list(self.iter_nodes())
 
-    def get_nodes(self, path: str = '') -> list[TreeStoreNode]:
+    def get_nodes(self, path: str = "") -> list[TreeStoreNode]:
         """Get nodes at path (or root if empty).
 
         Args:
@@ -753,7 +762,7 @@ class TreeStore(SubscriptionMixin):
 
     # ==================== Digest ====================
 
-    def iter_digest(self, what: str = '#k,#v') -> Iterator[Any]:
+    def iter_digest(self, what: str = "#k,#v") -> Iterator[Any]:
         """Yield data from nodes using digest syntax.
 
         Args:
@@ -770,16 +779,16 @@ class TreeStore(SubscriptionMixin):
             >>> for label in store.iter_digest('#k'):
             ...     print(label)
         """
-        specs = [s.strip() for s in what.split(',')]
+        specs = [s.strip() for s in what.split(",")]
 
         def _extract(node: TreeStoreNode, spec: str) -> Any:
-            if spec == '#k':
+            if spec == "#k":
                 return node.label
-            elif spec == '#v':
+            elif spec == "#v":
                 return node.value
-            elif spec == '#a':
+            elif spec == "#a":
                 return node.attr
-            elif spec.startswith('#a.'):
+            elif spec.startswith("#a."):
                 return node.attr.get(spec[3:])
             else:
                 raise ValueError(f"Unknown digest specifier: {spec}")
@@ -792,7 +801,7 @@ class TreeStore(SubscriptionMixin):
             for node in self._order:
                 yield tuple(_extract(node, spec) for spec in specs)
 
-    def digest(self, what: str = '#k,#v') -> list[Any]:
+    def digest(self, what: str = "#k,#v") -> list[Any]:
         """Extract data from nodes using digest syntax.
 
         Args:
@@ -816,9 +825,7 @@ class TreeStore(SubscriptionMixin):
     # ==================== Walk ====================
 
     def walk(
-        self,
-        callback: Callable[[TreeStoreNode], Any] | None = None,
-        _prefix: str = ""
+        self, callback: Callable[[TreeStoreNode], Any] | None = None, _prefix: str = ""
     ) -> Iterator[tuple[str, TreeStoreNode]] | None:
         """Walk the tree, optionally calling a callback on each node.
 
@@ -845,7 +852,9 @@ class TreeStore(SubscriptionMixin):
             return None
 
         # Generator mode
-        def _walk_gen(store: TreeStore, prefix: str) -> Iterator[tuple[str, TreeStoreNode]]:
+        def _walk_gen(
+            store: TreeStore, prefix: str
+        ) -> Iterator[tuple[str, TreeStoreNode]]:
             for node in store._order:
                 path = f"{prefix}.{node.label}" if prefix else node.label
                 yield path, node
@@ -942,7 +951,7 @@ class TreeStore(SubscriptionMixin):
             return
 
         for path, node in walk_result:
-            parent_path = path.rsplit('.', 1)[0] if '.' in path else ''
+            parent_path = path.rsplit(".", 1)[0] if "." in path else ""
             value = None if node.is_branch else node._value
             attr = dict(node.attr)
 
@@ -1005,7 +1014,7 @@ class TreeStore(SubscriptionMixin):
                     result[label] = child_dict
             else:
                 if node.attr:
-                    result[label] = {'_value': node.value, **node.attr}
+                    result[label] = {"_value": node.value, **node.attr}
                 else:
                     result[label] = node.value
         return result
@@ -1179,7 +1188,7 @@ class TreeStore(SubscriptionMixin):
 
     def to_tytx(
         self,
-        transport: Literal['json', 'msgpack'] | None = None,
+        transport: Literal["json", "msgpack"] | None = None,
         compact: bool = False,
     ) -> str | bytes:
         """Serialize TreeStore to TYTX format with type preservation.
@@ -1232,15 +1241,16 @@ class TreeStore(SubscriptionMixin):
             - flattened(): The underlying flat representation
         """
         from .serialization import to_tytx as serialize
+
         return serialize(self, transport=transport, compact=compact)
 
     @classmethod
     def from_tytx(
         cls,
         data: str | bytes,
-        transport: Literal['json', 'msgpack'] | None = None,
+        transport: Literal["json", "msgpack"] | None = None,
         builder: Any | None = None,
-    ) -> 'TreeStore':
+    ) -> "TreeStore":
         """Deserialize TreeStore from TYTX format with type preservation.
 
         Reconstructs a TreeStore from TYTX-serialized data. Automatically
@@ -1286,6 +1296,7 @@ class TreeStore(SubscriptionMixin):
             - to_tytx(): Serialize TreeStore to TYTX format
         """
         from .serialization import from_tytx as deserialize
+
         return deserialize(data, transport=transport, builder=builder)
 
     @classmethod
@@ -1293,7 +1304,7 @@ class TreeStore(SubscriptionMixin):
         cls,
         data: str,
         builder: Any | None = None,
-    ) -> 'TreeStore':
+    ) -> "TreeStore":
         """Load TreeStore from XML string.
 
         Each XML element becomes a node with:
@@ -1353,7 +1364,7 @@ class TreeStore(SubscriptionMixin):
         # Extract namespace prefixes from XML
         ns_decls = re.findall(r'xmlns:(\w+)=["\']([^"\']+)["\']', data)
         uri_to_prefix = {uri: prefix for prefix, uri in ns_decls}
-        ns_pattern = re.compile(r'\{([^}]+)\}(.+)')
+        ns_pattern = re.compile(r"\{([^}]+)\}(.+)")
 
         def clean_tag(tag: str) -> tuple[str, str | None]:
             """Return (local_name, prefixed_tag or None)."""
@@ -1362,19 +1373,21 @@ class TreeStore(SubscriptionMixin):
                 uri, local = match.groups()
                 prefix = uri_to_prefix.get(uri)
                 if prefix:
-                    return local, f'{prefix}:{local}'
+                    return local, f"{prefix}:{local}"
                 return local, None
             return tag, None
 
-        def load_element(element: ET.Element, store: 'TreeStore') -> None:
+        def load_element(element: ET.Element, store: "TreeStore") -> None:
             """Recursively load XML element into store."""
             local, prefixed = clean_tag(element.tag)
-            existing = [n.label for n in store.nodes() if n.label.startswith(f'{local}_')]
-            label = f'{local}_{len(existing)}'
+            existing = [
+                n.label for n in store.nodes() if n.label.startswith(f"{local}_")
+            ]
+            label = f"{local}_{len(existing)}"
 
-            attribs = {k: v for k, v in element.attrib.items() if not k.startswith('{')}
+            attribs = {k: v for k, v in element.attrib.items() if not k.startswith("{")}
             if prefixed:
-                attribs['_tag'] = prefixed
+                attribs["_tag"] = prefixed
 
             children = list(element)
             if children:
@@ -1383,7 +1396,7 @@ class TreeStore(SubscriptionMixin):
                     load_element(child, child_store)
                 store.set_item(label, child_store, _attributes=attribs)
             else:
-                value = element.text.strip() if element.text else ''
+                value = element.text.strip() if element.text else ""
                 store.set_item(label, value, _attributes=attribs)
 
         root_elem = ET.fromstring(data)
@@ -1454,16 +1467,18 @@ class TreeStore(SubscriptionMixin):
         """
         import xml.etree.ElementTree as ET
 
-        def store_to_element(store: 'TreeStore', tag: str) -> ET.Element:
+        def store_to_element(store: "TreeStore", tag: str) -> ET.Element:
             """Convert store to XML element."""
             element = ET.Element(tag)
 
             for node in store.nodes():
                 # Get tag from attr or strip suffix from label
-                node_tag = node.attr.get('_tag') or node.label.rsplit('_', 1)[0]
+                node_tag = node.attr.get("_tag") or node.label.rsplit("_", 1)[0]
 
                 # Copy non-internal attributes
-                attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith('_')}
+                attribs = {
+                    k: str(v) for k, v in node.attr.items() if not k.startswith("_")
+                }
 
                 if node.is_branch:
                     # Recurse into child store
@@ -1473,32 +1488,32 @@ class TreeStore(SubscriptionMixin):
                 else:
                     # Leaf node
                     child_elem = ET.SubElement(element, node_tag, attribs)
-                    if node.value is not None and node.value != '':
+                    if node.value is not None and node.value != "":
                         child_elem.text = str(node.value)
 
             return element
 
         nodes = list(self.nodes())
         if not nodes:
-            tag = root_tag or 'root'
-            return f'<{tag}/>'
+            tag = root_tag or "root"
+            return f"<{tag}/>"
 
         if len(nodes) == 1 and root_tag is None:
             # Single root node - use it directly
             node = nodes[0]
-            tag = node.attr.get('_tag') or node.label.rsplit('_', 1)[0]
-            attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith('_')}
+            tag = node.attr.get("_tag") or node.label.rsplit("_", 1)[0]
+            attribs = {k: str(v) for k, v in node.attr.items() if not k.startswith("_")}
 
             if node.is_branch:
                 root = store_to_element(node.value, tag)
                 root.attrib.update(attribs)
             else:
                 root = ET.Element(tag, attribs)
-                if node.value is not None and node.value != '':
+                if node.value is not None and node.value != "":
                     root.text = str(node.value)
         else:
             # Multiple root nodes - wrap in container
-            tag = root_tag or 'root'
+            tag = root_tag or "root"
             root = store_to_element(self, tag)
 
-        return ET.tostring(root, encoding='unicode')
+        return ET.tostring(root, encoding="unicode")

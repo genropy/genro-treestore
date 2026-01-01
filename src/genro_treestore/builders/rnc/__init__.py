@@ -18,8 +18,8 @@ from .rnc_schema import RncBuilder, LazyRncBuilder
 from .rnc_parser import parse_rnc, parse_rnc_file
 
 __all__ = [
-    'RncBuilder',
-    'LazyRncBuilder',
-    'parse_rnc',
-    'parse_rnc_file',
+    "RncBuilder",
+    "LazyRncBuilder",
+    "parse_rnc",
+    "parse_rnc_file",
 ]

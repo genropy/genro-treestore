@@ -160,9 +160,14 @@ class TreeStoreResolver:
     """
 
     __slots__ = (
-        'parent_node', '_cache_time', 'read_only',
-        '_cache', '_cache_timestamp', '_cache_time_delta',
-        '_init_args', '_init_kwargs',
+        "parent_node",
+        "_cache_time",
+        "read_only",
+        "_cache",
+        "_cache_timestamp",
+        "_cache_time_delta",
+        "_init_args",
+        "_init_kwargs",
     )
 
     def __init__(
@@ -350,7 +355,7 @@ class TreeStoreResolver:
                 self.parent_node._value = result
 
         # Continue traversal if there's remaining path
-        if remaining_path and hasattr(result, 'get_item'):
+        if remaining_path and hasattr(result, "get_item"):
             return result.get_item(remaining_path)
 
         return result
@@ -388,12 +393,12 @@ class TreeStoreResolver:
             >>> # }
         """
         return {
-            'resolver_module': self.__class__.__module__,
-            'resolver_class': self.__class__.__name__,
-            'args': self._init_args,
-            'kwargs': {
-                'cache_time': self.cache_time,
-                'read_only': self.read_only,
+            "resolver_module": self.__class__.__module__,
+            "resolver_class": self.__class__.__name__,
+            "args": self._init_args,
+            "kwargs": {
+                "cache_time": self.cache_time,
+                "read_only": self.read_only,
                 **self._init_kwargs,
             },
         }
@@ -425,9 +430,9 @@ class TreeStoreResolver:
             ... }
             >>> resolver = TreeStoreResolver.deserialize(data)
         """
-        module = importlib.import_module(data['resolver_module'])
-        resolver_cls = getattr(module, data['resolver_class'])
-        return resolver_cls(*data.get('args', ()), **data.get('kwargs', {}))
+        module = importlib.import_module(data["resolver_module"])
+        resolver_cls = getattr(module, data["resolver_class"])
+        return resolver_cls(*data.get("args", ()), **data.get("kwargs", {}))
 
     def __repr__(self) -> str:
         return (
@@ -479,7 +484,7 @@ class CallbackResolver(TreeStoreResolver):
             )
     """
 
-    __slots__ = ('callback',)
+    __slots__ = ("callback",)
 
     def __init__(
         self,
@@ -516,8 +521,5 @@ class CallbackResolver(TreeStoreResolver):
         return self.callback(self.parent_node)
 
     def __repr__(self) -> str:
-        callback_name = getattr(self.callback, '__name__', repr(self.callback))
-        return (
-            f"CallbackResolver({callback_name}, "
-            f"cache_time={self.cache_time})"
-        )
+        callback_name = getattr(self.callback, "__name__", repr(self.callback))
+        return f"CallbackResolver({callback_name}, " f"cache_time={self.cache_time})"

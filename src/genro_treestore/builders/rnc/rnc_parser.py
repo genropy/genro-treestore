@@ -43,37 +43,38 @@ if TYPE_CHECKING:
 
 class TokenType(Enum):
     """Token types for RNC lexer."""
+
     # Structural
-    LPAREN = auto()      # (
-    RPAREN = auto()      # )
-    LBRACE = auto()      # {
-    RBRACE = auto()      # }
-    LBRACKET = auto()    # [
-    RBRACKET = auto()    # ]
+    LPAREN = auto()  # (
+    RPAREN = auto()  # )
+    LBRACE = auto()  # {
+    RBRACE = auto()  # }
+    LBRACKET = auto()  # [
+    RBRACKET = auto()  # ]
 
     # Operators
-    EQUAL = auto()       # =
-    COMBINE = auto()     # |= or &=
-    PIPE = auto()        # |
-    COMMA = auto()       # ,
-    AMP = auto()         # &
-    MINUS = auto()       # -
-    STAR = auto()        # *
-    PLUS = auto()        # +
-    QMARK = auto()       # ?
-    TILDE = auto()       # ~
+    EQUAL = auto()  # =
+    COMBINE = auto()  # |= or &=
+    PIPE = auto()  # |
+    COMMA = auto()  # ,
+    AMP = auto()  # &
+    MINUS = auto()  # -
+    STAR = auto()  # *
+    PLUS = auto()  # +
+    QMARK = auto()  # ?
+    TILDE = auto()  # ~
 
     # Identifiers and literals
-    CNAME = auto()       # prefix:name (qualified name)
-    ID = auto()          # identifier
-    LITERAL = auto()     # "string"
+    CNAME = auto()  # prefix:name (qualified name)
+    ID = auto()  # identifier
+    LITERAL = auto()  # "string"
 
     # Keywords (subset of ID)
     KEYWORD = auto()
 
     # Comments
     DOCUMENTATION = auto()  # ## doc comment
-    COMMENT = auto()        # # comment
+    COMMENT = auto()  # # comment
 
     # End
     EOF = auto()
@@ -81,15 +82,32 @@ class TokenType(Enum):
 
 # RNC Keywords
 KEYWORDS = {
-    'attribute', 'default', 'datatypes', 'div', 'element', 'empty',
-    'external', 'grammar', 'include', 'inherit', 'list', 'mixed',
-    'namespace', 'notAllowed', 'parent', 'start', 'string', 'text', 'token'
+    "attribute",
+    "default",
+    "datatypes",
+    "div",
+    "element",
+    "empty",
+    "external",
+    "grammar",
+    "include",
+    "inherit",
+    "list",
+    "mixed",
+    "namespace",
+    "notAllowed",
+    "parent",
+    "start",
+    "string",
+    "text",
+    "token",
 }
 
 
 @dataclass
 class Token:
     """A lexical token."""
+
     type: TokenType
     value: str
     line: int
@@ -109,35 +127,35 @@ class RncLexer:
     """
 
     # NCNAME pattern: valid XML name (no colon)
-    NCNAME = r'[A-Za-z_][\w.-]*'
+    NCNAME = r"[A-Za-z_][\w.-]*"
 
     # Token patterns (order matters!)
     PATTERNS = [
-        (r'\s+', None),                          # Whitespace (skip)
-        (r'##.*', TokenType.DOCUMENTATION),      # Doc comment
-        (r'#.*', TokenType.COMMENT),             # Comment
-        (r'\(', TokenType.LPAREN),
-        (r'\)', TokenType.RPAREN),
-        (r'\{', TokenType.LBRACE),
-        (r'\}', TokenType.RBRACE),
-        (r'\[', TokenType.LBRACKET),
-        (r'\]', TokenType.RBRACKET),
-        (r'\|=|&=', TokenType.COMBINE),
-        (r'=', TokenType.EQUAL),
-        (r'\|', TokenType.PIPE),
-        (r',', TokenType.COMMA),
-        (r'&', TokenType.AMP),
-        (r'-', TokenType.MINUS),
-        (r'\*', TokenType.STAR),
-        (r'\+', TokenType.PLUS),
-        (r'\?', TokenType.QMARK),
-        (r'~', TokenType.TILDE),
-        (r'"[^"]*"', TokenType.LITERAL),         # Double-quoted string
-        (r"'[^']*'", TokenType.LITERAL),         # Single-quoted string
+        (r"\s+", None),  # Whitespace (skip)
+        (r"##.*", TokenType.DOCUMENTATION),  # Doc comment
+        (r"#.*", TokenType.COMMENT),  # Comment
+        (r"\(", TokenType.LPAREN),
+        (r"\)", TokenType.RPAREN),
+        (r"\{", TokenType.LBRACE),
+        (r"\}", TokenType.RBRACE),
+        (r"\[", TokenType.LBRACKET),
+        (r"\]", TokenType.RBRACKET),
+        (r"\|=|&=", TokenType.COMBINE),
+        (r"=", TokenType.EQUAL),
+        (r"\|", TokenType.PIPE),
+        (r",", TokenType.COMMA),
+        (r"&", TokenType.AMP),
+        (r"-", TokenType.MINUS),
+        (r"\*", TokenType.STAR),
+        (r"\+", TokenType.PLUS),
+        (r"\?", TokenType.QMARK),
+        (r"~", TokenType.TILDE),
+        (r'"[^"]*"', TokenType.LITERAL),  # Double-quoted string
+        (r"'[^']*'", TokenType.LITERAL),  # Single-quoted string
         # Qualified name (prefix:name or prefix:*)
-        (rf'({NCNAME}):({NCNAME}|\*)', TokenType.CNAME),
+        (rf"({NCNAME}):({NCNAME}|\*)", TokenType.CNAME),
         # Plain identifier
-        (rf'{NCNAME}', TokenType.ID),
+        (rf"{NCNAME}", TokenType.ID),
     ]
 
     def __init__(self, content: str):
@@ -153,14 +171,13 @@ class RncLexer:
 
         # Compile patterns
         self._patterns = [
-            (re.compile(pattern), token_type)
-            for pattern, token_type in self.PATTERNS
+            (re.compile(pattern), token_type) for pattern, token_type in self.PATTERNS
         ]
 
     def _update_position(self, text: str):
         """Update line and column based on consumed text."""
         for ch in text:
-            if ch == '\n':
+            if ch == "\n":
                 self.line += 1
                 self.col = 1
             else:
@@ -189,7 +206,7 @@ class RncLexer:
                         if token_type == TokenType.LITERAL:
                             value = text[1:-1]  # Remove quotes
                         elif token_type in (TokenType.COMMENT, TokenType.DOCUMENTATION):
-                            value = text.lstrip('#').strip()
+                            value = text.lstrip("#").strip()
 
                         yield Token(token_type, value, self.line, self.col)
 
@@ -202,7 +219,7 @@ class RncLexer:
                 self._update_position(self.content[self.pos])
                 self.pos += 1
 
-        yield Token(TokenType.EOF, '', self.line, self.col)
+        yield Token(TokenType.EOF, "", self.line, self.col)
 
 
 class RncParser:
@@ -235,7 +252,7 @@ class RncParser:
         """Peek at token at current position + offset."""
         pos = self.pos + offset
         if pos >= len(self.tokens):
-            return Token(TokenType.EOF, '', 0, 0)
+            return Token(TokenType.EOF, "", 0, 0)
         return self.tokens[pos]
 
     def advance(self) -> Token:
@@ -252,7 +269,7 @@ class RncParser:
         """
         token = self.advance()
         if token.type not in types:
-            expected = ' or '.join(t.name for t in types)
+            expected = " or ".join(t.name for t in types)
             raise SyntaxError(
                 f"Expected {expected}, got {token.type.name} '{token.value}' "
                 f"at line {token.line}:{token.col}"
@@ -285,11 +302,11 @@ class RncParser:
             token = self.peek()
 
             if token.type == TokenType.KEYWORD:
-                if token.value == 'default':
+                if token.value == "default":
                     self._parse_default_namespace()
-                elif token.value == 'namespace':
+                elif token.value == "namespace":
                     self._parse_namespace()
-                elif token.value == 'datatypes':
+                elif token.value == "datatypes":
                     self._parse_datatypes()
                 else:
                     break
@@ -300,12 +317,12 @@ class RncParser:
         """Parse: default namespace = uri"""
         self.expect(TokenType.KEYWORD)  # default
         self.expect(TokenType.KEYWORD)  # namespace
-        prefix = ''
+        prefix = ""
         if self.peek().type == TokenType.ID:
             prefix = self.advance().value
         self.expect(TokenType.EQUAL)
         uri = self._parse_literal_or_inherit()
-        self.store.set_item('_ns_default', uri, prefix=prefix)
+        self.store.set_item("_ns_default", uri, prefix=prefix)
 
     def _parse_namespace(self):
         """Parse: namespace prefix = uri"""
@@ -313,7 +330,7 @@ class RncParser:
         prefix = self.expect(TokenType.ID, TokenType.KEYWORD).value
         self.expect(TokenType.EQUAL)
         uri = self._parse_literal_or_inherit()
-        self.store.set_item(f'_ns_{prefix}', uri)
+        self.store.set_item(f"_ns_{prefix}", uri)
 
     def _parse_datatypes(self):
         """Parse: datatypes prefix = uri"""
@@ -321,16 +338,16 @@ class RncParser:
         prefix = self.expect(TokenType.ID, TokenType.KEYWORD).value
         self.expect(TokenType.EQUAL)
         uri = self.expect(TokenType.LITERAL).value
-        self.store.set_item(f'_dt_{prefix}', uri)
+        self.store.set_item(f"_dt_{prefix}", uri)
 
     def _parse_literal_or_inherit(self) -> str:
         """Parse a literal or 'inherit' keyword."""
         token = self.peek()
         if token.type == TokenType.LITERAL:
             return self.advance().value
-        elif token.type == TokenType.KEYWORD and token.value == 'inherit':
+        elif token.type == TokenType.KEYWORD and token.value == "inherit":
             self.advance()
-            return 'inherit'
+            return "inherit"
         else:
             return self.expect(TokenType.LITERAL).value
 
@@ -355,16 +372,16 @@ class RncParser:
         token = self.peek()
 
         # Handle start = pattern
-        if token.type == TokenType.KEYWORD and token.value == 'start':
+        if token.type == TokenType.KEYWORD and token.value == "start":
             self.advance()
             self.expect(TokenType.EQUAL, TokenType.COMBINE)
             value, attrs = self._parse_pattern()
-            self.store.set_item('start', value, **attrs)
+            self.store.set_item("start", value, **attrs)
             return
 
         # Handle div { ... } (grouping construct, not element definition)
         # Only if followed by {, otherwise it's a definition name
-        if token.type == TokenType.KEYWORD and token.value == 'div':
+        if token.type == TokenType.KEYWORD and token.value == "div":
             if self.peek(1).type == TokenType.LBRACE:
                 self.advance()
                 self.expect(TokenType.LBRACE)
@@ -373,11 +390,11 @@ class RncParser:
                 return
 
         # Handle include "file"
-        if token.type == TokenType.KEYWORD and token.value == 'include':
+        if token.type == TokenType.KEYWORD and token.value == "include":
             self.advance()
             uri = self.expect(TokenType.LITERAL).value
             # Skip optional inherit and override block
-            if self.peek().type == TokenType.KEYWORD and self.peek().value == 'inherit':
+            if self.peek().type == TokenType.KEYWORD and self.peek().value == "inherit":
                 self.advance()
                 self.expect(TokenType.EQUAL)
                 self.expect(TokenType.ID, TokenType.KEYWORD)
@@ -385,8 +402,8 @@ class RncParser:
                 while not self.accept(TokenType.RBRACE):
                     self._parse_definition()
             # Sanitize label: replace dots and dashes with underscores
-            safe_uri = uri.replace('.', '_').replace('-', '_').replace('/', '_')
-            self.store.set_item(f'_include_{safe_uri}', uri, _type='include')
+            safe_uri = uri.replace(".", "_").replace("-", "_").replace("/", "_")
+            self.store.set_item(f"_include_{safe_uri}", uri, _type="include")
             return
 
         # Regular definition: name = pattern
@@ -410,12 +427,12 @@ class RncParser:
 
         # Add documentation if captured
         if self._current_doc:
-            attrs['_doc'] = self._current_doc
+            attrs["_doc"] = self._current_doc
             self._current_doc = None
 
         # Handle combine operators
         if op_token.type == TokenType.COMBINE:
-            attrs['_combine'] = op_token.value
+            attrs["_combine"] = op_token.value
 
         # Store the definition
         self.store.set_item(name, value, **attrs)
@@ -442,15 +459,15 @@ class RncParser:
 
         if self.peek().type == TokenType.PIPE:
             choices = self._TreeStore()
-            choices.set_item('choice_0', left, **attrs)
+            choices.set_item("choice_0", left, **attrs)
             idx = 1
 
             while self.accept(TokenType.PIPE):
                 right, right_attrs = self._parse_interleave()
-                choices.set_item(f'choice_{idx}', right, **right_attrs)
+                choices.set_item(f"choice_{idx}", right, **right_attrs)
                 idx += 1
 
-            return choices, {'_combinator': 'choice'}
+            return choices, {"_combinator": "choice"}
 
         return left, attrs
 
@@ -460,15 +477,15 @@ class RncParser:
 
         if self.peek().type == TokenType.AMP:
             items = self._TreeStore()
-            items.set_item('item_0', left, **attrs)
+            items.set_item("item_0", left, **attrs)
             idx = 1
 
             while self.accept(TokenType.AMP):
                 right, right_attrs = self._parse_sequence()
-                items.set_item(f'item_{idx}', right, **right_attrs)
+                items.set_item(f"item_{idx}", right, **right_attrs)
                 idx += 1
 
-            return items, {'_combinator': 'interleave'}
+            return items, {"_combinator": "interleave"}
 
         return left, attrs
 
@@ -478,15 +495,15 @@ class RncParser:
 
         if self.peek().type == TokenType.COMMA:
             items = self._TreeStore()
-            items.set_item('item_0', left, **attrs)
+            items.set_item("item_0", left, **attrs)
             idx = 1
 
             while self.accept(TokenType.COMMA):
                 right, right_attrs = self._parse_unary()
-                items.set_item(f'item_{idx}', right, **right_attrs)
+                items.set_item(f"item_{idx}", right, **right_attrs)
                 idx += 1
 
-            return items, {'_combinator': 'sequence'}
+            return items, {"_combinator": "sequence"}
 
         return left, attrs
 
@@ -496,13 +513,13 @@ class RncParser:
 
         # Check for cardinality modifier
         if self.accept(TokenType.QMARK):
-            attrs['optional'] = True
+            attrs["optional"] = True
         elif self.accept(TokenType.STAR):
-            attrs['multiple'] = True
-            attrs['min'] = 0
+            attrs["multiple"] = True
+            attrs["min"] = 0
         elif self.accept(TokenType.PLUS):
-            attrs['multiple'] = True
-            attrs['min'] = 1
+            attrs["multiple"] = True
+            attrs["min"] = 1
 
         return value, attrs
 
@@ -528,44 +545,48 @@ class RncParser:
         if token.type == TokenType.KEYWORD:
             keyword = self.advance().value
 
-            if keyword == 'element':
+            if keyword == "element":
                 return self._parse_element()
-            elif keyword == 'attribute':
+            elif keyword == "attribute":
                 return self._parse_attribute()
-            elif keyword == 'empty':
-                return 'empty', {'_type': 'empty'}
-            elif keyword == 'text':
-                return 'text', {'_type': 'text'}
-            elif keyword == 'notAllowed':
-                return 'notAllowed', {'_type': 'notAllowed'}
-            elif keyword == 'mixed':
+            elif keyword == "empty":
+                return "empty", {"_type": "empty"}
+            elif keyword == "text":
+                return "text", {"_type": "text"}
+            elif keyword == "notAllowed":
+                return "notAllowed", {"_type": "notAllowed"}
+            elif keyword == "mixed":
                 self.expect(TokenType.LBRACE)
                 value, inner_attrs = self._parse_pattern()
                 self.expect(TokenType.RBRACE)
-                inner_attrs['_mixed'] = True
+                inner_attrs["_mixed"] = True
                 return value, inner_attrs
-            elif keyword == 'list':
+            elif keyword == "list":
                 self.expect(TokenType.LBRACE)
                 value, inner_attrs = self._parse_pattern()
                 self.expect(TokenType.RBRACE)
-                inner_attrs['_list'] = True
+                inner_attrs["_list"] = True
                 return value, inner_attrs
-            elif keyword == 'grammar':
+            elif keyword == "grammar":
                 return self._parse_grammar()
-            elif keyword == 'external':
+            elif keyword == "external":
                 uri = self.expect(TokenType.LITERAL).value
-                return uri, {'_type': 'external'}
-            elif keyword == 'parent':
+                return uri, {"_type": "external"}
+            elif keyword == "parent":
                 ref = self.expect(TokenType.ID, TokenType.KEYWORD).value
-                return ref, {'_type': 'parent_ref'}
-            elif keyword in ('string', 'token'):
+                return ref, {"_type": "parent_ref"}
+            elif keyword in ("string", "token"):
                 # Datatype
                 params = None
                 if self.peek().type == TokenType.LITERAL:
                     params = self.advance().value
-                return keyword, {'_type': 'datatype', '_params': params} if params else {'_type': 'datatype'}
+                return keyword, (
+                    {"_type": "datatype", "_params": params}
+                    if params
+                    else {"_type": "datatype"}
+                )
             else:
-                return keyword, {'_type': 'keyword'}
+                return keyword, {"_type": "keyword"}
 
         # Qualified name (datatype): prefix:name
         if token.type == TokenType.CNAME:
@@ -578,28 +599,32 @@ class RncParser:
             if self.accept(TokenType.LBRACE):
                 dt_params = self._parse_datatype_params()
                 self.expect(TokenType.RBRACE)
-                result_attrs = {'_type': 'datatype', '_datatype': cname}
+                result_attrs = {"_type": "datatype", "_datatype": cname}
                 if params:
-                    result_attrs['_params'] = params
+                    result_attrs["_params"] = params
                 if dt_params:
-                    result_attrs['_dt_params'] = dt_params
+                    result_attrs["_dt_params"] = dt_params
                 return cname, result_attrs
-            return cname, {'_type': 'datatype', '_params': params} if params else {'_type': 'datatype'}
+            return cname, (
+                {"_type": "datatype", "_params": params}
+                if params
+                else {"_type": "datatype"}
+            )
 
         # Literal string
         if token.type == TokenType.LITERAL:
-            return self.advance().value, {'_type': 'literal'}
+            return self.advance().value, {"_type": "literal"}
 
         # Reference (identifier)
         if token.type == TokenType.ID:
             ref = self.advance().value
-            return ref, {'_type': 'ref'}
+            return ref, {"_type": "ref"}
 
         # If we get here, skip unknown token
         if token.type != TokenType.EOF:
             self.advance()
 
-        return '', attrs
+        return "", attrs
 
     def _parse_element(self) -> tuple[TreeStoreType, dict]:
         """Parse: element name { pattern }"""
@@ -612,9 +637,9 @@ class RncParser:
         if isinstance(content, self._TreeStore):
             result = content
         else:
-            result.set_item('content', content, **content_attrs)
+            result.set_item("content", content, **content_attrs)
 
-        attrs = {'_type': 'element', '_tag': name}
+        attrs = {"_type": "element", "_tag": name}
         attrs.update(name_attrs)
         return result, attrs
 
@@ -625,7 +650,7 @@ class RncParser:
         content, content_attrs = self._parse_pattern()
         self.expect(TokenType.RBRACE)
 
-        attrs = {'_type': 'attribute', '_tag': name}
+        attrs = {"_type": "attribute", "_tag": name}
         attrs.update(name_attrs)
         attrs.update(content_attrs)
 
@@ -635,7 +660,9 @@ class RncParser:
     def _parse_datatype_params(self) -> dict:
         """Parse datatype parameters: { param = value, ... }"""
         params = {}
-        while self.peek().type != TokenType.RBRACE and self.peek().type != TokenType.EOF:
+        while (
+            self.peek().type != TokenType.RBRACE and self.peek().type != TokenType.EOF
+        ):
             # Expect: name = value
             if self.peek().type in (TokenType.ID, TokenType.KEYWORD):
                 name = self.advance().value
@@ -670,7 +697,7 @@ class RncParser:
             if self.peek().type == TokenType.MINUS:
                 self.advance()
                 exceptions = self._parse_name_exceptions()
-                return name, {'_except': exceptions}
+                return name, {"_except": exceptions}
             return name, attrs
 
         # Qualified name (with optional wildcard like local:*)
@@ -680,7 +707,7 @@ class RncParser:
             if self.peek().type == TokenType.MINUS:
                 self.advance()
                 exceptions = self._parse_name_exceptions()
-                return name, {'_except': exceptions}
+                return name, {"_except": exceptions}
             return name, attrs
 
         # Name class in parentheses: (name | name | ...)
@@ -689,24 +716,36 @@ class RncParser:
             names = []
 
             # First name (ID, KEYWORD, CNAME, or STAR all valid)
-            if self.peek().type in (TokenType.ID, TokenType.KEYWORD, TokenType.CNAME, TokenType.STAR):
+            if self.peek().type in (
+                TokenType.ID,
+                TokenType.KEYWORD,
+                TokenType.CNAME,
+                TokenType.STAR,
+            ):
                 names.append(self.advance().value)
 
             # Additional names with |
             while self.accept(TokenType.PIPE):
-                if self.peek().type in (TokenType.ID, TokenType.KEYWORD, TokenType.CNAME, TokenType.STAR):
+                if self.peek().type in (
+                    TokenType.ID,
+                    TokenType.KEYWORD,
+                    TokenType.CNAME,
+                    TokenType.STAR,
+                ):
                     names.append(self.advance().value)
 
             self.expect(TokenType.RPAREN)
 
-            result_name = '|'.join(names) if len(names) > 1 else (names[0] if names else '')
-            result_attrs = {'_name_choice': True} if len(names) > 1 else {}
+            result_name = (
+                "|".join(names) if len(names) > 1 else (names[0] if names else "")
+            )
+            result_attrs = {"_name_choice": True} if len(names) > 1 else {}
 
             # Check for subtraction after group
             if self.peek().type == TokenType.MINUS:
                 self.advance()
                 exceptions = self._parse_name_exceptions()
-                result_attrs['_except'] = exceptions
+                result_attrs["_except"] = exceptions
 
             return result_name, result_attrs
 
@@ -717,10 +756,10 @@ class RncParser:
             if self.peek().type == TokenType.MINUS:
                 self.advance()
                 exceptions = self._parse_name_exceptions()
-                return '*', {'_any_name': True, '_except': exceptions}
-            return '*', {'_any_name': True}
+                return "*", {"_any_name": True, "_except": exceptions}
+            return "*", {"_any_name": True}
 
-        return '', attrs
+        return "", attrs
 
     def _parse_name_exceptions(self) -> list[str]:
         """Parse name exceptions: (name | name | ...)"""
@@ -732,7 +771,11 @@ class RncParser:
                 exceptions.append(self.advance().value)
 
             while self.accept(TokenType.PIPE):
-                if self.peek().type in (TokenType.ID, TokenType.KEYWORD, TokenType.CNAME):
+                if self.peek().type in (
+                    TokenType.ID,
+                    TokenType.KEYWORD,
+                    TokenType.CNAME,
+                ):
                     exceptions.append(self.advance().value)
 
             self.expect(TokenType.RPAREN)
@@ -757,7 +800,7 @@ class RncParser:
             self._parse_definition()
 
         self.store = outer_store
-        return grammar, {'_type': 'grammar'}
+        return grammar, {"_type": "grammar"}
 
 
 def parse_rnc(content: str) -> TreeStoreType:

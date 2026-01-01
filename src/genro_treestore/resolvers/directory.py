@@ -109,21 +109,28 @@ class DirectoryResolver(TreeStoreResolver):
     """
 
     __slots__ = (
-        'path', 'relocate', 'invisible', 'ext', 'include',
-        'exclude', 'callback', 'dropext', 'processors',
+        "path",
+        "relocate",
+        "invisible",
+        "ext",
+        "include",
+        "exclude",
+        "callback",
+        "dropext",
+        "processors",
     )
 
     def __init__(
         self,
         path: str,
-        relocate: str = '',
+        relocate: str = "",
         *,
         cache_time: int = 500,
         read_only: bool = True,
         invisible: bool = False,
-        ext: str = '',
-        include: str = '',
-        exclude: str = '',
+        ext: str = "",
+        include: str = "",
+        exclude: str = "",
         callback: Callable[[dict], bool | None] | None = None,
         dropext: bool = False,
         processors: dict[str, Callable[[str], Any] | bool] | None = None,
@@ -166,11 +173,11 @@ class DirectoryResolver(TreeStoreResolver):
         # Store args for serialization
         self._init_args = (path, relocate)
         self._init_kwargs = {
-            'invisible': invisible,
-            'ext': ext,
-            'include': include,
-            'exclude': exclude,
-            'dropext': dropext,
+            "invisible": invisible,
+            "ext": ext,
+            "include": include,
+            "exclude": exclude,
+            "dropext": dropext,
             # Note: callback and processors not serializable
         }
 
@@ -178,15 +185,15 @@ class DirectoryResolver(TreeStoreResolver):
     def instance_kwargs(self) -> dict[str, Any]:
         """Get kwargs for creating child DirectoryResolvers."""
         return {
-            'cache_time': self.cache_time,
-            'read_only': self.read_only,
-            'invisible': self.invisible,
-            'ext': self.ext,
-            'include': self.include,
-            'exclude': self.exclude,
-            'callback': self.callback,
-            'dropext': self.dropext,
-            'processors': self.processors,
+            "cache_time": self.cache_time,
+            "read_only": self.read_only,
+            "invisible": self.invisible,
+            "ext": self.ext,
+            "include": self.include,
+            "exclude": self.exclude,
+            "callback": self.callback,
+            "dropext": self.dropext,
+            "processors": self.processors,
         }
 
     @smartasync
@@ -201,12 +208,12 @@ class DirectoryResolver(TreeStoreResolver):
         # Parse extensions mapping: 'xml' or 'xml:processor_name'
         extensions: dict[str, str] = {}
         if self.ext:
-            for ext_spec in self.ext.split(','):
-                parts = ext_spec.strip().split(':')
+            for ext_spec in self.ext.split(","):
+                parts = ext_spec.strip().split(":")
                 ext_name = parts[0]
                 processor_name = parts[1] if len(parts) > 1 else parts[0]
                 extensions[ext_name] = processor_name
-        extensions['directory'] = 'directory'
+        extensions["directory"] = "directory"
 
         result = TreeStore()
 
@@ -218,11 +225,11 @@ class DirectoryResolver(TreeStoreResolver):
 
         # Filter hidden files
         if not self.invisible:
-            directory = [x for x in directory if not x.startswith('.')]
+            directory = [x for x in directory if not x.startswith(".")]
 
         for fname in directory:
             # Skip editor backup/journal files
-            if fname.startswith('#') or fname.endswith('#') or fname.endswith('~'):
+            if fname.startswith("#") or fname.endswith("#") or fname.endswith("~"):
                 continue
 
             nodecaption = fname
@@ -231,7 +238,7 @@ class DirectoryResolver(TreeStoreResolver):
             add_it = True
 
             if os.path.isdir(fullpath):
-                ext = 'directory'
+                ext = "directory"
                 if self.exclude:
                     add_it = self._filter_match(fname, exclude=self.exclude)
             else:
@@ -258,7 +265,7 @@ class DirectoryResolver(TreeStoreResolver):
 
             if handler is None:
                 # Try method-based processor
-                handler = getattr(self, f'processor_{processor_name}', None)
+                handler = getattr(self, f"processor_{processor_name}", None)
             if handler is None:
                 handler = self.processor_default
 
@@ -273,25 +280,25 @@ class DirectoryResolver(TreeStoreResolver):
                 mtime = atime = ctime = size = None
 
             # Build caption (like Bag)
-            caption = fname.replace('_', ' ').strip()
-            m = re.match(r'(\d+) (.*)', caption)
+            caption = fname.replace("_", " ").strip()
+            m = re.match(r"(\d+) (.*)", caption)
             if m:
-                caption = f'!!{int(m.group(1))} {m.group(2).capitalize()}'
+                caption = f"!!{int(m.group(1))} {m.group(2).capitalize()}"
             else:
                 caption = caption.capitalize()
 
             # Build node attributes
             nodeattr = {
-                'file_name': fname,
-                'file_ext': ext,
-                'rel_path': relpath,
-                'abs_path': fullpath,
-                'mtime': mtime,
-                'atime': atime,
-                'ctime': ctime,
-                'nodecaption': nodecaption,
-                'caption': caption,
-                'size': size,
+                "file_name": fname,
+                "file_ext": ext,
+                "rel_path": relpath,
+                "abs_path": fullpath,
+                "mtime": mtime,
+                "atime": atime,
+                "ctime": ctime,
+                "nodecaption": nodecaption,
+                "caption": caption,
+                "size": size,
             }
 
             # Apply callback filter
@@ -322,15 +329,15 @@ class DirectoryResolver(TreeStoreResolver):
         Returns:
             Label safe for use as TreeStore key.
         """
-        if ext != 'directory' and not self.dropext:
-            name = f'{name}_{ext}'
-        return name.replace('.', '_')
+        if ext != "directory" and not self.dropext:
+            name = f"{name}_{ext}"
+        return name.replace(".", "_")
 
     def _filter_match(
         self,
         name: str,
-        include: str = '',
-        exclude: str = '',
+        include: str = "",
+        exclude: str = "",
     ) -> bool:
         """Check if filename matches include/exclude patterns.
 
@@ -344,14 +351,14 @@ class DirectoryResolver(TreeStoreResolver):
         """
         # Check exclude first
         if exclude:
-            for pattern in exclude.split(','):
+            for pattern in exclude.split(","):
                 pattern = pattern.strip()
                 if fnmatch.fnmatch(name, pattern):
                     return False
 
         # Check include
         if include:
-            for pattern in include.split(','):
+            for pattern in include.split(","):
                 pattern = pattern.strip()
                 if fnmatch.fnmatch(name, pattern):
                     return True
@@ -383,10 +390,7 @@ class DirectoryResolver(TreeStoreResolver):
         return None
 
     def __repr__(self) -> str:
-        return (
-            f"DirectoryResolver({self.path!r}, "
-            f"cache_time={self.cache_time})"
-        )
+        return f"DirectoryResolver({self.path!r}, " f"cache_time={self.cache_time})"
 
 
 class TxtDocResolver(TreeStoreResolver):
@@ -403,7 +407,7 @@ class TxtDocResolver(TreeStoreResolver):
         >>> content = node.value  # Reads file contents
     """
 
-    __slots__ = ('path',)
+    __slots__ = ("path",)
 
     def __init__(
         self,
@@ -432,7 +436,7 @@ class TxtDocResolver(TreeStoreResolver):
         Returns:
             File contents as bytes.
         """
-        with open(self.path, mode='rb') as f:
+        with open(self.path, mode="rb") as f:
             return f.read()
 
     def __repr__(self) -> str:

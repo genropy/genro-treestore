@@ -43,7 +43,6 @@ from __future__ import annotations
 from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .core import TreeStore
     from .node import TreeStoreNode
 
 # Type alias for subscriber callbacks
@@ -156,7 +155,7 @@ class SubscriptionMixin:
             oldvalue: Previous value.
             reason: Optional reason string.
         """
-        path = '.'.join(pathlist)
+        path = ".".join(pathlist)
         for callback in self._upd_subscribers.values():
             callback(node=node, path=path, evt=evt, oldvalue=oldvalue, reason=reason)
 
@@ -187,16 +186,19 @@ class SubscriptionMixin:
         """
         if pathlist is None:
             pathlist = []
-        path = '.'.join(pathlist) if pathlist else node.label
+        path = ".".join(pathlist) if pathlist else node.label
 
         for callback in self._ins_subscribers.values():
-            callback(node=node, path=path, index=index, evt='ins', reason=reason)
+            callback(node=node, path=path, index=index, evt="ins", reason=reason)
 
         if self.parent is not None:
             parent_store = self.parent.parent
             if parent_store is not None:
                 parent_store._on_node_inserted(
-                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
+                    node,
+                    index,
+                    [self.parent.label] + (pathlist or [node.label]),
+                    reason,
                 )
 
     def _on_node_deleted(
@@ -219,14 +221,17 @@ class SubscriptionMixin:
         """
         if pathlist is None:
             pathlist = []
-        path = '.'.join(pathlist) if pathlist else node.label
+        path = ".".join(pathlist) if pathlist else node.label
 
         for callback in self._del_subscribers.values():
-            callback(node=node, path=path, index=index, evt='del', reason=reason)
+            callback(node=node, path=path, index=index, evt="del", reason=reason)
 
         if self.parent is not None:
             parent_store = self.parent.parent
             if parent_store is not None:
                 parent_store._on_node_deleted(
-                    node, index, [self.parent.label] + (pathlist or [node.label]), reason
+                    node,
+                    index,
+                    [self.parent.label] + (pathlist or [node.label]),
+                    reason,
                 )

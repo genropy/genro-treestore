@@ -59,7 +59,16 @@ class TreeStoreNode:
         'Alice'
     """
 
-    __slots__ = ('label', 'attr', '_value', 'parent', 'tag', '_node_subscribers', '_resolver', '_invalid_reasons')
+    __slots__ = (
+        "label",
+        "attr",
+        "_value",
+        "parent",
+        "tag",
+        "_node_subscribers",
+        "_resolver",
+        "_invalid_reasons",
+    )
 
     def __init__(
         self,
@@ -93,6 +102,7 @@ class TreeStoreNode:
 
     def __repr__(self) -> str:
         from .core import TreeStore
+
         value_repr = (
             f"TreeStore({len(self._value)})"
             if isinstance(self._value, TreeStore)
@@ -150,24 +160,26 @@ class TreeStoreNode:
         if trigger:
             # Notify node subscribers
             for callback in self._node_subscribers.values():
-                callback(node=self, info=oldvalue, evt='upd_value')
+                callback(node=self, info=oldvalue, evt="upd_value")
 
             # Notify parent store
             if self.parent is not None:
                 self.parent._on_node_changed(
-                    self, [self.label], 'upd_value', oldvalue, reason
+                    self, [self.label], "upd_value", oldvalue, reason
                 )
 
     @property
     def is_branch(self) -> bool:
         """True if this node contains a TreeStore (has children)."""
         from .core import TreeStore
+
         return isinstance(self._value, TreeStore)
 
     @property
     def is_leaf(self) -> bool:
         """True if this node contains a scalar value."""
         from .core import TreeStore
+
         return not isinstance(self._value, TreeStore)
 
     @property
@@ -221,16 +233,17 @@ class TreeStoreNode:
             # Notify node subscribers
             if self._node_subscribers:
                 changed_attrs = [
-                    k for k in self.attr
+                    k
+                    for k in self.attr
                     if k not in oldattr or self.attr[k] != oldattr[k]
                 ]
                 for callback in self._node_subscribers.values():
-                    callback(node=self, info=changed_attrs, evt='upd_attr')
+                    callback(node=self, info=changed_attrs, evt="upd_attr")
 
             # Notify parent store
             if self.parent is not None:
                 self.parent._on_node_changed(
-                    self, [self.label], 'upd_attr', reason=reason
+                    self, [self.label], "upd_attr", reason=reason
                 )
 
     def subscribe(self, subscriber_id: str, callback: NodeSubscriberCallback) -> None:
@@ -265,5 +278,3 @@ class TreeStoreNode:
     def is_valid(self) -> bool:
         """True if this node has no validation errors."""
         return len(self._invalid_reasons) == 0
-
-
