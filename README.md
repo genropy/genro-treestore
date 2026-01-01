@@ -19,10 +19,12 @@ pip install genro-treestore
 
 - **TreeStore**: Hierarchical data with `set_item`/`get_item`, path autocreate, fluent chaining
 - **TreeStoreNode**: Nodes with label, attributes, and value
-- **TreeStoreBuilder**: Builder pattern with auto-labeling and `@valid_children` validation
+- **Builder pattern**: Auto-labeling and schema-based validation
 - **Path syntax**: Dotted paths, positional (`#N`), and attribute (`?attr`) access
-- **Digest**: Extract data with `#k`, `#v`, `#a` syntax
-- **Zero dependencies**: Pure Python, no external packages required
+- **Triggers**: Subscribe to insert, update, delete events with automatic propagation
+- **Resolvers**: Lazy/dynamic value computation with caching and TTL support
+- **Serialization**: TYTX format with type preservation (Decimal, date, datetime, time)
+- **Zero dependencies**: Pure Python core, optional `genro-tytx` for serialization
 
 ## Quick Start
 
@@ -119,6 +121,92 @@ def section(self, **attr):
 | Explicit labels in path | Auto-generated labels (`tag_N`) |
 | Fluent chaining (returns TreeStore) | Returns TreeStore/Node |
 | No validation | `@valid_children` validation |
+
+## Triggers (Subscriptions)
+
+Subscribe to changes on the store with automatic event propagation up the tree:
+
+```python
+from genro_treestore import TreeStore
+
+store = TreeStore()
+
+def on_change(node, path, evt, reason):
+    print(f"{evt}: {path}")
+
+# Subscribe to all events
+store.subscribe('watcher', insert=on_change, update=on_change, delete=on_change)
+
+store.set_item('users.alice', 'Alice')  # prints: ins: users, ins: users.alice
+store.set_item('users.alice', 'Alicia') # prints: upd_value: users.alice
+store.del_item('users.alice')           # prints: del: users.alice
+
+store.unsubscribe('watcher')
+```
+
+Events propagate from child to root, so subscribing at root captures all changes.
+
+## Resolvers
+
+Lazy/dynamic value computation with optional caching:
+
+```python
+from genro_treestore import TreeStore, CallbackResolver
+
+store = TreeStore()
+store.set_item('config.base_url', 'https://api.example.com')
+store.set_item('config.version', 'v2')
+
+# Dynamic computed value
+def get_full_url(node):
+    parent = node.parent
+    return f"{parent.get_item('base_url')}/{parent.get_item('version')}"
+
+store.set_item('config.full_url')
+store.set_resolver('config.full_url', CallbackResolver(get_full_url))
+
+store['config.full_url']  # 'https://api.example.com/v2'
+
+# With caching (value cached for 60 seconds)
+store.set_resolver('config.full_url', CallbackResolver(get_full_url, cache_time=60))
+```
+
+Built-in resolvers: `CallbackResolver`, `DirectoryResolver`, `TxtDocResolver`.
+
+## Serialization (TYTX)
+
+TreeStore supports type-preserving serialization via [genro-tytx](https://pypi.org/project/genro-tytx/):
+
+```bash
+pip install genro-tytx
+```
+
+```python
+from decimal import Decimal
+from datetime import date
+from genro_treestore import TreeStore
+
+store = TreeStore()
+store.set_item('invoice.amount', Decimal('1234.56'))
+store.set_item('invoice.date', date(2025, 1, 15))
+store.set_item('invoice.paid', False)
+
+# Serialize to JSON (types preserved)
+data = store.to_tytx()
+
+# Deserialize - types are restored exactly
+restored = TreeStore.from_tytx(data)
+restored['invoice.amount']  # Decimal('1234.56'), not float
+restored['invoice.date']    # date(2025, 1, 15), not string
+
+# Binary format (smaller)
+binary_data = store.to_tytx(transport='msgpack')
+restored = TreeStore.from_tytx(binary_data, transport='msgpack')
+```
+
+**Supported types**: `Decimal`, `date`, `datetime`, `time`, plus all JSON-native types.
+
+**Note**: Naive datetimes are serialized as UTC and returned as timezone-aware (UTC) on deserialization.
 
 ## Development
 
